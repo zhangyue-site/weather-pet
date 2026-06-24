@@ -29,10 +29,11 @@ func _ready():
 func _process(delta: float):
 	state_time += delta
 	state_timer -= delta
-	# 临时交互动作 (挥手/跳跃/转圈/趴下等) 播放约 2 秒后自动回到环境态
-	if _is_transient(current_state) and state_time > 2.0:
+	# 临时交互动作 (挥手/跳跃/转圈/趴下等) 播放约 2.5 秒后自动回到环境态
+	if _is_transient(current_state) and state_time > 2.5:
 		current_state = PetState.IDLE  # 强制复位, 让 _evaluate_transitions 重新决策
 		state_time = 0.0
+		state_timer = 0.0
 	_evaluate_transitions()
 	_update_state(delta)
 
@@ -147,9 +148,31 @@ func _evaluate_transitions():
 
 func try_transition(new_state: PetState, min_duration: float):
 	if new_state == current_state: return
+	# state_timer > 0 表示当前状态有锁定时长, 未到不切换 (防抖核心)
 	if state_timer > 0: return
-	if state_time < min_duration and current_state != PetState.IDLE: return
+	# 优先级保护: 高优先级(天气/电量/节日)可打断低优先级(时间表)
+	var cur_prio := _state_priority(current_state)
+	var new_prio := _state_priority(new_state)
+	# 同优先级或更低优先级: 需满足 min_duration
+	if new_prio <= cur_prio:
+		if current_state != PetState.IDLE and state_time < min_duration:
+			return
 	enter_state(new_state)
+	# 环境态设置持续时长 (5-12秒), 避免边界抖动
+	if not _is_transient(new_state):
+		state_timer = randf_range(6.0, 12.0)
+
+# 状态优先级: 越高越优先打断
+func _state_priority(s: PetState) -> int:
+	match s:
+		PetState.LOW_BATTERY, PetState.STORM_SCARED: return 5  # 紧急
+		PetState.RAIN_UMBRELLA, PetState.SNOW_CATCH, PetState.SNOW_FIGHT: return 4  # 天气
+		PetState.RAIN_PUDDLE_JUMP, PetState.COLD_SHIVER, PetState.HOT_MELT: return 4
+		PetState.WIND_LEAN, PetState.FOG_WANDER: return 4
+		PetState.PHONE_SCROLL, PetState.FESTIVAL: return 3  # 状态
+		PetState.SLEEP_DEEP, PetState.SLEEP_RESTLESS, PetState.WAKE_UP: return 2  # 日程
+		PetState.WALKING, PetState.EAT, PetState.MORNING_WASH, PetState.IDLE: return 1
+		_: return 1
 
 func enter_state(state: PetState):
 	prev_state = current_state
@@ -157,55 +180,41 @@ func enter_state(state: PetState):
 	state_time = 0.0
 	state_timer = 0.0
 
-	if pet and pet.has_method("set_arms"):
+	# 3D 动画驱动: FSM 状态 → glb 动画
+	# 模型动画: idle/walk/run/wave/up/fall/tilt_l/tilt_r
+	if pet and pet.has_method("play_anim"):
 		match state:
-			PetState.IDLE:
-				pet.set_arms(30, 30)
-				if pet.has_method("set_expression"): pet.set_expression(0, true)
-				if pet.has_method("set_walking"): pet.set_walking(false)
-			PetState.WALKING:
-				pet.set_arms(40, 15, 0, 0)
-				if pet.has_method("set_expression"): pet.set_expression(0)
-				if pet.has_method("set_walking"): pet.set_walking(true)
-			PetState.SLEEP_DEEP:
-				pet.set_arms(10, 10, 0, 0)
-				if pet.has_method("set_expression"): pet.set_expression(2, true)
-				if pet.has_method("set_walking"): pet.set_walking(false)
-			PetState.SLEEP_RESTLESS:
-				pet.set_arms(10, 10, 0, 0)
-				if pet.has_method("set_expression"): pet.set_expression(3, true)
-				if pet.has_method("set_walking"): pet.set_walking(false)
-			PetState.WAKE_UP:
-				pet.set_arms(90, 90, -30, -30)
-				if pet.has_method("set_expression"): pet.set_expression(3)
-			PetState.EAT:
-				pet.set_arms(85, 70, 0, -20)
-				if pet.has_method("set_expression"): pet.set_expression(0)
-			PetState.PHONE_SCROLL:
-				pet.set_arms(30, 100, 0, -30)
-				if pet.has_method("set_expression"): pet.set_expression(0)
-			PetState.STORM_SCARED:
-				pet.set_arms(10, 10, 0, 0)
-				if pet.has_method("set_expression"): pet.set_expression(5, true)
-			PetState.RAIN_UMBRELLA:
-				pet.set_arms(20, 150, 0, 90)
-				if pet.has_method("set_expression"): pet.set_expression(0)
-			PetState.SNOW_CATCH:
-				pet.set_arms(140, 140, -20, -20)
-				if pet.has_method("set_expression"): pet.set_expression(4)
-			PetState.COLD_SHIVER:
-				pet.set_arms(10, 10, 0, 0)
-				if pet.has_method("set_expression"): pet.set_expression(6)
-			PetState.HOT_MELT:
-				pet.set_arms(80, 80, -30, -30)
-				if pet.has_method("set_expression"): pet.set_expression(7)
-			PetState.FESTIVAL:
-				pet.set_arms(150, 150, 0, 0)
-				if pet.has_method("set_expression"): pet.set_expression(4)
+			# 散步类 → walk
+			PetState.WALKING, PetState.FOG_WANDER:
+				pet.play_anim("walk")
+				pet.face_front()
+			# 互动/庆祝 → wave (挥手)
+			PetState.WAVE, PetState.JUMP, PetState.SPIN, PetState.FESTIVAL, PetState.SMS_REACT:
+				pet.play_anim("wave")
+				pet.face_front()
+			# 倒下/趴下/害怕/冷/低电量 → fall (蜷缩)
+			PetState.PLAY_DEAD, PetState.FALL_DOWN, PetState.STORM_SCARED, PetState.COLD_SHIVER, PetState.LOW_BATTERY:
+				pet.play_anim("fall")
+				pet.face_front()
+			# 风吹 → tilt
+			PetState.WIND_LEAN:
+				pet.play_anim("tilt_l")
+				pet.face_front()
+			PetState.TILT_LEFT:
+				pet.play_anim("tilt_l")
+			PetState.TILT_RIGHT:
+				pet.play_anim("tilt_r")
+			# 其余 (睡觉/吃饭/刷手机/撑伞/接雪/热化/起床等) → idle (站姿)
 			_:
-				pet.set_arms(30, 30)
-				if pet.has_method("set_expression"): pet.set_expression(0)
-				if pet.has_method("set_walking"): pet.set_walking(false)
+				pet.play_anim("idle")
+				# 睡觉时随机面向一侧, 增加自然感
+				if state in [PetState.SLEEP_DEEP, PetState.SLEEP_RESTLESS]:
+					if randi() % 2 == 0:
+						pet.face_left()
+					else:
+						pet.face_right()
+				else:
+					pet.face_front()
 
 	state_changed.emit(state, prev_state)
 
@@ -218,22 +227,23 @@ func _update_state(delta: float):
 		PetState.IDLE:
 			pass
 		PetState.WALKING:
+			# 行走轻微上下浮动
 			var bounce = sin(state_time * 8.0) * 3.0
-			pet.position.y = base_pos.y + bounce * (pet._scale_factor if "_scale_factor" in pet else 1.0)
+			pet.position.y = base_pos.y + bounce
 		PetState.SLEEP_DEEP:
-			pet.position.y = base_pos.y + sin(state_time * 2.0) * 1.5 * (pet._scale_factor if "_scale_factor" in pet else 1.0)
+			pet.position.y = base_pos.y + sin(state_time * 2.0) * 1.5
 		PetState.SLEEP_RESTLESS:
 			var shake = sin(state_time * 12.0) * 2.0
-			pet.position.x = base_pos.x + shake * (pet._scale_factor if "_scale_factor" in pet else 1.0)
+			pet.position.x = base_pos.x + shake
 		PetState.STORM_SCARED:
 			var shake2 = sin(state_time * 20.0) * 4.0
-			pet.position.x = base_pos.x + shake2 * (pet._scale_factor if "_scale_factor" in pet else 1.0)
+			pet.position.x = base_pos.x + shake2
 		PetState.COLD_SHIVER:
 			var shake3 = sin(state_time * 15.0) * 2.0
-			pet.position.x = base_pos.x + shake3 * (pet._scale_factor if "_scale_factor" in pet else 1.0)
+			pet.position.x = base_pos.x + shake3
 		PetState.FESTIVAL:
 			var bounce2 = abs(sin(state_time * 4.0)) * 8.0
-			pet.position.y = base_pos.y - bounce2 * (pet._scale_factor if "_scale_factor" in pet else 1.0)
+			pet.position.y = base_pos.y - bounce2
 
 func on_touch(type: String):
 	match type:
