@@ -1,0 +1,160 @@
+class_name PetRenderer
+extends Node2D
+
+enum Expression { SMILE, HAPPY, SAD, OPEN, SCARED, SLEEP, SLEEPY_HALF, WINK }
+
+var current_expr: Expression = Expression.SMILE
+
+var color_skin := Color(1.0, 0.8, 0.5)
+var color_skin_shadow := Color(0.91, 0.66, 0.35)
+var color_hair := Color(0.36, 0.25, 0.2)
+var color_shirt := Color(0.26, 0.65, 0.96)
+var color_shirt_dk := Color(0.12, 0.53, 0.9)
+var color_pants := Color(0.22, 0.28, 0.31)
+var color_shoe := Color(0.13, 0.13, 0.13)
+var color_mouth := Color(0.78, 0.16, 0.16)
+var color_eye := Color(0.24, 0.15, 0.13)
+
+var _time: float = 0.0
+var _blink_timer: float = 0.0
+var _blinking: bool = false
+var _arm_l_angle: float = 30.0
+var _arm_r_angle: float = 30.0
+var _forearm_l_angle: float = 0.0
+var _forearm_r_angle: float = 0.0
+var _walking: bool = false
+var _scale_factor: float = 2.5
+var is_night: bool = false
+
+func _ready():
+	scale = Vector2(_scale_factor, _scale_factor)
+
+func _process(delta):
+	_time += delta
+	_blink_timer += delta
+	if not _blinking and _blink_timer > 3.0 + randf() * 2.0:
+		_blinking = true
+		_blink_timer = 0.0
+	if _blinking and _blink_timer > 0.08:
+		_blinking = false
+	queue_redraw()
+
+func _draw():
+	_draw_legs()
+	_draw_body()
+
+	_draw_head()	_draw_arms()
+	_draw_head()
+
+func _draw_legs():
+	var foot_sep = sin(_time * 4.0) * 3.0 if _walking else 0.0
+	draw_line(Vector2(-10, 60), Vector2(-10 + foot_sep, 85), color_pants, 10.0)
+	draw_line(Vector2(10, 60), Vector2(10 - foot_sep, 85), color_pants, 10.0)
+	draw_circle(Vector2(-10 + foot_sep, 88), 6.0, color_shoe)
+	draw_circle(Vector2(10 - foot_sep, 88), 6.0, color_shoe)
+
+func _draw_body():
+	if is_night:
+		draw_circle(Vector2(0, -30), 80.0, Color(1, 1, 1, 0.03))
+	draw_rect(Rect2(-20, -25, 40, 50), color_shirt)
+	draw_rect(Rect2(-6, -25, 12, 6), color_shirt_dk)
+	draw_line(Vector2(0, -15), Vector2(0, 15), Color(1, 1, 1, 0.15), 1.0)
+
+func _draw_arms():
+	var la = deg_to_rad(_arm_l_angle)
+	var ra = deg_to_rad(_arm_r_angle)
+	var fl_a = deg_to_rad(_forearm_l_angle)
+	var fr_a = deg_to_rad(_forearm_r_angle)
+
+	var arm_l_end = Vector2(-25, -20) + Vector2(-cos(la), sin(la)) * 40
+	var hand_l = arm_l_end + Vector2(-cos(la + fl_a), sin(la + fl_a)) * 35
+	draw_line(Vector2(-20, -20), arm_l_end, color_shirt, 14.0)
+	draw_line(arm_l_end, hand_l, color_skin, 10.0)
+	draw_circle(hand_l, 5.0, color_skin)
+
+	var arm_r_end = Vector2(25, -20) + Vector2(cos(ra), sin(ra)) * 40
+	var hand_r = arm_r_end + Vector2(cos(ra + fr_a), sin(ra + fr_a)) * 35
+	draw_line(Vector2(20, -20), arm_r_end, color_shirt, 14.0)
+	draw_line(arm_r_end, hand_r, color_skin, 10.0)
+	draw_circle(hand_r, 5.0, color_skin)
+
+func _draw_head():
+	var hc = Vector2(0, -70)
+	var r := 25.0
+
+	draw_circle(hc + Vector2(2, 2), r, color_skin_shadow)
+	draw_circle(hc, r, color_skin)
+	draw_circle(hc + Vector2(-8, -10), r * 0.25, Color(1, 1, 1, 0.12))
+
+	# hair
+	draw_arc(hc + Vector2(0, -5), r, deg_to_rad(190), deg_to_rad(350), 20, color_hair, r * 0.4, true)
+
+	# ears
+	draw_circle(hc + Vector2(-r * 0.85, 2), 5.0, color_skin)
+	draw_circle(hc + Vector2(r * 0.85, 2), 5.0, color_skin)
+
+	# blush
+	draw_circle(hc + Vector2(-14, 5), 5.0, Color(1, 0.55, 0.55, 0.18))
+	draw_circle(hc + Vector2(14, 5), 5.0, Color(1, 0.55, 0.55, 0.18))
+
+	# eyes
+	var ey := hc.y - 2.0
+	var sp := 12.0
+	var blink = _blinking or current_expr == Expression.SLEEP or current_expr == Expression.SLEEPY_HALF
+
+	if current_expr == Expression.SLEEP:
+		draw_line(Vector2(-sp - 4, ey), Vector2(-sp + 4, ey), color_eye, 3.0)
+		draw_line(Vector2(sp - 4, ey), Vector2(sp + 4, ey), color_eye, 3.0)
+	elif current_expr == Expression.SLEEPY_HALF:
+		draw_arc(Vector2(-sp, ey), 5, 0, PI, 10, color_eye, 3.0, false)
+		draw_arc(Vector2(sp, ey), 5, 0, PI, 10, color_eye, 3.0, false)
+	elif blink:
+		draw_line(Vector2(-sp - 4, ey), Vector2(-sp + 4, ey), color_eye, 3.0)
+		draw_line(Vector2(sp - 4, ey), Vector2(sp + 4, ey), color_eye, 3.0)
+	else:
+		draw_circle(Vector2(-sp, ey), 6.0, Color.WHITE)
+		draw_circle(Vector2(sp, ey), 6.0, Color.WHITE)
+		draw_circle(Vector2(-sp + 1, ey + 1), 3.5, color_eye)
+		draw_circle(Vector2(sp + 1, ey + 1), 3.5, color_eye)
+		draw_circle(Vector2(-sp + 3, ey - 2), 1.5, Color.WHITE)
+		draw_circle(Vector2(sp + 3, ey - 2), 1.5, Color.WHITE)
+
+	# mouth
+	var my := hc.y + 10.0
+	match current_expr:
+		Expression.SMILE, Expression.HAPPY:
+			draw_arc(Vector2(0, my), 8, 0, PI, 10, color_mouth, 2.5, false)
+		Expression.SAD:
+			draw_arc(Vector2(0, my + 3), 7, PI, 2 * PI, 10, color_mouth, 2.5, false)
+		Expression.OPEN, Expression.SCARED:
+			draw_circle(Vector2(0, my), 5, color_mouth)
+			draw_circle(Vector2(0, my), 3, Color(0.3, 0.1, 0.1))
+		Expression.SLEEP, Expression.SLEEPY_HALF:
+			draw_line(Vector2(-4, my), Vector2(4, my), color_mouth, 2.0)
+		Expression.WINK:
+			draw_arc(Vector2(0, my), 7, 0, PI, 10, color_mouth, 2.5, false)
+		_:
+			draw_arc(Vector2(0, my), 6, deg_to_rad(10), deg_to_rad(170), 10, color_mouth, 2.5, false)
+
+func set_arms(a_l: float, a_r: float, f_l: float = 0.0, f_r: float = 0.0, instant: bool = false):
+	if instant:
+		_arm_l_angle = a_l
+		_arm_r_angle = a_r
+		_forearm_l_angle = f_l
+		_forearm_r_angle = f_r
+	else:
+		var tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(self, "_arm_l_angle", a_l, 0.3)
+		tw.tween_property(self, "_arm_r_angle", a_r, 0.3)
+		tw.tween_property(self, "_forearm_l_angle", f_l, 0.3)
+		tw.tween_property(self, "_forearm_r_angle", f_r, 0.3)
+
+func set_walking(w: bool):
+	_walking = w
+
+func set_expression(expr: Expression, instant: bool = false):
+	if instant:
+		current_expr = expr
+	else:
+		var tw = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_callback(func(): current_expr = expr).set_delay(0.15)

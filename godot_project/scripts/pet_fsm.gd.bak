@@ -1,0 +1,227 @@
+class_name PetFSM
+extends Node
+
+# ─── 电子宠物 FSM 行为树 ───
+# 优先级: 突发事件 > 天气反应 > 时段节奏 > 空闲
+
+enum PetState {
+	IDLE, WALKING, SLEEP_DEEP, SLEEP_RESTLESS, WAKE_UP,
+	EAT, DRINK_HOT, MORNING_WASH,
+	PHONE_SCROLL, SMS_REACT, LOW_BATTERY,
+	RAIN_UMBRELLA, RAIN_PUDDLE_JUMP, STORM_SCARED,
+	SNOW_CATCH, SNOW_FIGHT, COLD_SHIVER, HOT_MELT,
+	WIND_LEAN, FOG_WANDER,
+	WAVE, JUMP, SPIN, PLAY_DEAD, FALL_DOWN, GET_UP,
+	FESTIVAL,
+	TILT_LEFT, TILT_RIGHT,
+}
+
+var current_state: PetState = PetState.IDLE
+var prev_state: PetState = PetState.IDLE
+var state_time: float = 0.0
+var state_timer: float = 0.0
+
+@onready var pet: PetRenderer = get_parent().get_node("PetRenderer") if get_parent().has_node("PetRenderer") else null
+@onready var data: Node = get_node("/root/DataChannel") if has_node("/root/DataChannel") else null
+
+signal state_changed(new_state: PetState, old_state: PetState)
+
+func _ready():
+	enter_state(PetState.IDLE)
+
+func _process(delta):
+	state_time += delta
+	state_timer -= delta
+	
+	_evaluate_transitions()
+	_update_state(delta)
+
+func _evaluate_transitions():
+	if !data: return
+	
+	var hour = data.current_hour
+	var minute = data.current_minute
+	var t = hour * 60 + minute
+	var weather = data.current_weather.get("condition", "clear")
+	var temp = data.current_weather.get("temperature", 22.0)
+	var wind = data.current_weather.get("wind_speed", 5.0)
+	var sig = data.phone_signal
+	var batt = data.battery_percent
+	var charging = data.is_charging
+	var festival = data.current_festival
+	
+	# ===== 1. 突发事件（最高优先级）=====
+	if sig <= 1:
+		try_transition(PetState.PHONE_SCROLL, 0)
+		return
+	if batt <= 15 && !charging:
+		try_transition(PetState.LOW_BATTERY, 0)
+		return
+	
+	# ===== 2. 节日 =====
+	if festival.name != "" && state_time > 5.0:
+		try_transition(PetState.FESTIVAL, 3.0)
+		return
+	
+	# ===== 3. 天气反应 =====
+	if weather == "thunderstorm" || weather == "heavy_rain":
+		try_transition(PetState.STORM_SCARED, 0)
+		return
+	if weather.begins_with("rain") || weather == "drizzle":
+		try_transition(PetState.RAIN_UMBRELLA, 0)
+		return
+	if weather == "snow" || weather == "heavy_snow":
+		var which = PetState.SNOW_CATCH if randi() % 2 == 0 else PetState.SNOW_FIGHT
+		try_transition(which, 0)
+		return
+	if weather == "fog" || weather == "haze":
+		try_transition(PetState.FOG_WANDER, 0)
+		return
+	if weather == "windy" && wind > 30:
+		try_transition(PetState.WIND_LEAN, 0)
+		return
+	if temp > 37:
+		try_transition(PetState.HOT_MELT, 0)
+		return
+	if temp < 5:
+		try_transition(PetState.COLD_SHIVER, 0)
+		return
+	
+	# ===== 4. 时段节奏 =====
+	if t < 330:
+		try_transition(PetState.SLEEP_DEEP, 0)
+		return
+	elif t < 360:
+		try_transition(PetState.SLEEP_RESTLESS, 0)
+		return
+	elif t < 390:
+		try_transition(PetState.WAKE_UP, 3.0)
+		return
+	elif t < 450:
+		try_transition(PetState.MORNING_WASH, 0)
+		return
+	elif t < 510:
+		try_transition(PetState.EAT, 0)
+		return
+	elif t < 690:
+		try_transition(PetState.WALKING, 0)
+		return
+	elif t < 750:
+		try_transition(PetState.EAT, 0)
+		return
+	elif t < 780:
+		try_transition(PetState.PHONE_SCROLL, 0)
+		return
+	elif t < 1080:
+		try_transition(PetState.WALKING, 0)
+		return
+	elif t < 1170:
+		try_transition(PetState.EAT, 0)
+		return
+	elif t < 1350:
+		try_transition(PetState.PHONE_SCROLL, 0)
+		return
+	elif t < 1410:
+		try_transition(PetState.MORNING_WASH, 0)
+		return
+	else:
+		try_transition(PetState.SLEEP_DEEP, 0)
+		return
+
+func try_transition(new_state: PetState, min_duration: float):
+	if new_state == current_state: return
+	if state_timer > 0: return
+	if state_time < min_duration && current_state != PetState.IDLE: return
+	enter_state(new_state)
+
+func enter_state(state: PetState):
+	prev_state = current_state
+	current_state = state
+	state_time = 0.0
+	state_timer = 0.0
+	
+	if pet:
+		match state:
+			PetState.IDLE:
+				pet.set_arms(30, 30)
+				pet.set_expression(PetExpression.SMILE, true)
+				pet.set_walking(false)
+			PetState.WALKING:
+				pet.set_arms(40, 15, 0, 0)
+				pet.set_expression(PetExpression.SMILE)
+				pet.set_walking(true)
+			PetState.SLEEP_DEEP:
+				pet.set_arms(10, 10, 0, 0)
+				pet.set_expression(PetExpression.SLEEP, true)
+				pet.set_walking(false)
+			PetState.SLEEP_RESTLESS:
+				pet.set_arms(10, 10, 0, 0)
+				pet.set_expression(PetExpression.SLEEPY_HALF, true)
+				pet.set_walking(false)
+			PetState.WAKE_UP:
+				pet.set_arms(90, 90, -30, -30)
+				pet.set_expression(PetExpression.SLEEPY_HALF)
+			PetState.EAT:
+				pet.set_arms(85, 70, 0, -20)
+				pet.set_expression(PetExpression.SMILE)
+			PetState.PHONE_SCROLL:
+				pet.set_arms(30, 100, 0, -30)
+				pet.set_expression(PetExpression.SMILE)
+			PetState.STORM_SCARED:
+				pet.set_arms(10, 10, 0, 0)
+				pet.set_expression(PetExpression.SCARED, true)
+			PetState.RAIN_UMBRELLA:
+				pet.set_arms(20, 150, 0, 90)
+				pet.set_expression(PetExpression.SMILE)
+			PetState.SNOW_CATCH:
+				pet.set_arms(140, 140, -20, -20)
+				pet.set_expression(PetExpression.HAPPY)
+			PetState.COLD_SHIVER:
+				pet.set_arms(10, 10, 0, 0)
+				pet.set_expression(PetExpression.SAD)
+			PetState.HOT_MELT:
+				pet.set_arms(80, 80, -30, -30)
+				pet.set_expression(PetExpression.OPEN)
+			PetState.FESTIVAL:
+				pet.set_arms(150, 150, 0, 0)
+				pet.set_expression(PetExpression.HAPPY)
+			_:
+				pet.set_arms(30, 30)
+				pet.set_expression(PetExpression.SMILE)
+				pet.set_walking(false)
+	
+	state_changed.emit(state, prev_state)
+
+func _update_state(delta):
+	match current_state:
+		PetState.IDLE:
+			pass
+		PetState.WALKING:
+			var bounce = sin(state_time * 8.0) * 3.0
+			if pet: pet.position.y = bounce * pet.scale_factor
+		PetState.SLEEP_DEEP:
+			if pet: pet.position.y = sin(state_time * 2.0) * 1.5 * pet.scale_factor
+		PetState.SLEEP_RESTLESS:
+			var shake = sin(state_time * 12.0) * 2.0
+			if pet: pet.position.x = shake * pet.scale_factor
+		PetState.STORM_SCARED:
+			var shake = sin(state_time * 20.0) * 4.0
+			if pet: pet.position.x = shake * pet.scale_factor
+		PetState.COLD_SHIVER:
+			var shake = sin(state_time * 15.0) * 2.0
+			if pet: pet.position.x = shake * pet.scale_factor
+		PetState.FESTIVAL:
+			var bounce = abs(sin(state_time * 4.0)) * 8.0
+			if pet: pet.position.y = -bounce * pet.scale_factor
+
+func on_touch(type: String):
+	match type:
+		"tap":
+			try_transition(PetState.WAVE if randi() % 2 == 0 else PetState.JUMP, 0.5)
+		"longpress":
+			try_transition(PetState.PLAY_DEAD, 0)
+		"double":
+			try_transition(PetState.SPIN, 0)
+
+func state_name(s: PetState) -> String:
+	return PetState.keys()[s]
