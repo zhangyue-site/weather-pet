@@ -269,14 +269,14 @@ func _layout_scene():
 		prop_system_node.position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.58)
 
 # ============================================================
-#  信息 HUD (顶部一条 + 底部一条, 自适应宽度防重叠)
+#  信息 HUD (苹果风格: 顶部居中天气 + 底部毛玻璃状态栏)
 # ============================================================
 func _draw_hud(viewport_size: Vector2):
 	if not data:
 		return
 	var s := _scale_factor
-	var pad := 20.0 * s
 	var vp_w := viewport_size.x
+	var vp_h := viewport_size.y
 
 	var hour: int = data.current_hour
 	var minute: int = data.current_minute
@@ -288,6 +288,7 @@ func _draw_hud(viewport_size: Vector2):
 	var cond := String(w.get("condition", "clear"))
 	var temp := float(w.get("temperature", 22.0))
 	var hum := float(w.get("humidity", 50.0))
+	var feels := float(w.get("feels_like", temp))
 	var cond_label := _weather_label(cond)
 	var cond_icon := _weather_icon(cond)
 
@@ -295,120 +296,136 @@ func _draw_hud(viewport_size: Vector2):
 	var chg: bool = data.is_charging if "is_charging" in data else false
 	var sig: int = data.phone_signal if "phone_signal" in data else 4
 
-	# ==================== 顶部横条 (时间 | 分隔 | 天气) ====================
-	# 整条横跨, 内部分两半, 避免左右卡片重叠
-	var top_h := 92.0 * s
-	var top_card := Rect2(pad, pad, vp_w - pad * 2, top_h)
-	_draw_glass_card(top_card)
+	# ==================== 顶部: 时间 + 城市 (简约居中) ====================
+	# 苹果风格: 大号时间居中, 城市在下方小字
+	var cx := vp_w * 0.5
+	var top_y := 48.0 * s
 
-	var half_w := top_card.size.x * 0.5
-	var left_cx := top_card.position.x + 24 * s   # 左半区起点
-	var right_cx := top_card.position.x + half_w + 16 * s  # 右半区起点
-
-	# --- 左: 时间(大) + 城市(小, 可点击) ---
-	var time_size := 40 * s
-	draw_string(_cjk_font, Vector2(left_cx, top_card.position.y + 48 * s), time_str,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, time_size, Color.WHITE)
+	# 时间 (超大, 苹果 SF 风格)
+	var time_size := 56 * s
+	draw_string(_cjk_font, Vector2(cx, top_y + time_size * 0.75), time_str,
+		HORIZONTAL_ALIGNMENT_CENTER, vp_w, time_size, Color(1, 1, 1, 0.95))
 	if _hud_flash > 0.0:
-		draw_string(_cjk_font, Vector2(left_cx, top_card.position.y + 48 * s), time_str,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, time_size, Color(1.0, 0.95, 0.4, _hud_flash))
+		draw_string(_cjk_font, Vector2(cx, top_y + time_size * 0.75), time_str,
+			HORIZONTAL_ALIGNMENT_CENTER, vp_w, time_size,
+			Color(1.0, 0.95, 0.5, _hud_flash * 0.6))
 
-	# 城市行 + 定位模式图标 (GPS🛰 / 自定义📍 / 演示🔄)
+	# 城市 + 时段 (小字, 可点击切换)
 	var loc_mode: String = data.location_mode if "location_mode" in data else "gps"
-	var loc_icon := "🛰️" if loc_mode == "gps" else ("📍" if loc_mode == "custom" else "🔄")
-	var city_text := loc_icon + " " + city + "  " + period
+	var city_text := city + " · " + period
 	var city_size := 17 * s
-	draw_string(_cjk_font, Vector2(left_cx, top_card.position.y + 76 * s), city_text,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, city_size, Color(0.85, 0.9, 1.0, 0.95))
-	# 切换提示 (小箭头)
-	var city_w := _cjk_font.get_string_size(city_text, HORIZONTAL_ALIGNMENT_LEFT, -1, city_size).x
-	var arrow_x := left_cx + city_w + 6 * s
-	var arrow_a := 0.5 + sin(_time * 3.0) * 0.2 if _demo_enabled else 0.4
-	draw_string(_cjk_font, Vector2(arrow_x, top_card.position.y + 76 * s), "⇄",
+	var city_y := top_y + time_size + 8 * s
+	draw_string(_cjk_font, Vector2(cx, city_y + city_size * 0.75), city_text,
+		HORIZONTAL_ALIGNMENT_CENTER, vp_w, city_size, Color(1, 1, 1, 0.65))
+	# 记录城市点击区 (整行宽, 易点)
+	_city_card_rect = Rect2(vp_w * 0.2, city_y - city_size * 0.3,
+		vp_w * 0.6, city_size * 1.3)
+	# 切换提示小箭头 (悬于城市右侧, 演示模式闪烁)
+	var arrow_a := (0.4 + sin(_time * 2.5) * 0.2) if _demo_enabled else 0.3
+	var city_w := _cjk_font.get_string_size(city_text, HORIZONTAL_ALIGNMENT_CENTER, vp_w, city_size).x
+	draw_string(_cjk_font, Vector2(cx + city_w * 0.5 + 8 * s, city_y + city_size * 0.75), "⇄",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, city_size, Color(1.0, 0.85, 0.3, arrow_a))
-	# 记录城市卡片区域 (用于点击切换)
-	_city_card_rect = Rect2(left_cx - 4 * s, top_card.position.y + 60 * s,
-		city_w + 24 * s, 22 * s)
 
-	# --- 中间分隔竖线 ---
-	var div_x := top_card.position.x + half_w
-	draw_line(Vector2(div_x, top_card.position.y + 18 * s),
-		Vector2(div_x, top_card.end.y - 18 * s), Color(1, 1, 1, 0.12), 1.0)
+	# ==================== 中部偏上: 天气信息 (大温度居中) ====================
+	# 苹果天气 App 风格: 巨大温度数字 + 天气描述
+	var weather_y := vp_h * 0.28
+	var temp_size := 96 * s
+	draw_string(_cjk_font, Vector2(cx, weather_y + temp_size * 0.7),
+		"%.0f°" % temp, HORIZONTAL_ALIGNMENT_CENTER, vp_w, temp_size,
+		Color(1, 1, 1, 0.92))
+	# 天气描述 (图标 + 文字)
+	var cond_text := cond_icon + " " + cond_label
+	var cond_size := 20 * s
+	draw_string(_cjk_font, Vector2(cx, weather_y + temp_size + cond_size),
+		cond_text, HORIZONTAL_ALIGNMENT_CENTER, vp_w, cond_size, Color(1, 1, 1, 0.75))
+	# 体感温度 + 湿度 (小字)
+	var detail := "体感 %.0f°  ·  湿度 %.0f%%" % [feels, hum]
+	draw_string(_cjk_font, Vector2(cx, weather_y + temp_size + cond_size + 22 * s),
+		detail, HORIZONTAL_ALIGNMENT_CENTER, vp_w, 14 * s, Color(1, 1, 1, 0.5))
 
-	# --- 右: 温度(大) + 天气描述(小) ---
-	var temp_size := 38 * s
-	draw_string(_cjk_font, Vector2(right_cx, top_card.position.y + 48 * s),
-		"%.0f°" % temp, HORIZONTAL_ALIGNMENT_LEFT, -1, temp_size, Color.WHITE)
-	var sub := "%s %s   💧%.0f%%" % [cond_icon, cond_label, hum]
-	draw_string(_cjk_font, Vector2(right_cx, top_card.position.y + 76 * s), sub,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 16 * s, Color(0.85, 0.9, 1.0, 0.95))
+	# ==================== 底部: 毛玻璃状态胶囊 (苹果 Control Center 风) ====================
+	var pill_h := 52.0 * s
+	var pill_w := minf(vp_w - 36 * s, 360 * s)
+	var pill_x := (vp_w - pill_w) * 0.5
+	var pill_y := vp_h - 36 * s - pill_h
+	var pill_rect := Rect2(pill_x, pill_y, pill_w, pill_h)
+	_draw_glass_pill(pill_rect)
 
-	# ==================== 底部横条 (设备 | 分隔 | 状态) ====================
-	var bot_h := 76.0 * s
-	var bot_card := Rect2(pad, viewport_size.y - pad - bot_h, vp_w - pad * 2, bot_h)
-	_draw_glass_card(bot_card)
+	# 状态胶囊内容: 电量 | 信号 | 小人状态 (均分三栏)
+	var seg_w := pill_w / 3.0
 
-	var b_half := bot_card.size.x * 0.5
-	var b_left := bot_card.position.x + 20 * s
-	var b_right := bot_card.position.x + b_half + 16 * s
-	var b_cy := bot_card.position.y + bot_h * 0.5
+	# 栏1: 电量
+	var s1x := pill_x + seg_w * 0.5
+	_draw_battery_icon(Vector2(s1x - 30 * s, pill_y + pill_h * 0.5 - 7 * s), batt, chg, s)
+	draw_string(_cjk_font, Vector2(s1x + 6 * s, pill_y + pill_h * 0.5 + 6 * s),
+		"%d%%" % batt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15 * s, Color(1, 1, 1, 0.9))
 
-	# --- 左: 电量 + 信号 ---
-	_draw_battery_icon(Vector2(b_left, b_cy - 9 * s), batt, chg, s)
-	draw_string(_cjk_font, Vector2(b_left + 44 * s, b_cy + 6 * s),
-		"%d%%%s" % [batt, " ⚡" if chg else ""],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 18 * s, Color.WHITE)
-	_draw_signal_icon(Vector2(b_left + 108 * s, b_cy), sig, s)
-	draw_string(_cjk_font, Vector2(b_left + 145 * s, b_cy + 6 * s),
-		"%dG" % [4 if sig >= 3 else 3],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 16 * s, Color(0.85, 0.9, 1.0, 0.9))
+	# 栏1/2 分隔点
+	draw_circle(Vector2(pill_x + seg_w, pill_y + pill_h * 0.5), 1.5 * s, Color(1, 1, 1, 0.25))
 
-	# --- 分隔线 ---
-	var b_div := bot_card.position.x + b_half
-	draw_line(Vector2(b_div, bot_card.position.y + 18 * s),
-		Vector2(b_div, bot_card.end.y - 18 * s), Color(1, 1, 1, 0.12), 1.0)
+	# 栏2: 信号
+	var s2x := pill_x + seg_w * 1.5
+	_draw_signal_icon(Vector2(s2x - 20 * s, pill_y + pill_h * 0.5), sig, s)
+	draw_string(_cjk_font, Vector2(s2x + 4 * s, pill_y + pill_h * 0.5 + 6 * s),
+		"%dG" % [4 if sig >= 3 else 3], HORIZONTAL_ALIGNMENT_LEFT, -1, 15 * s, Color(1, 1, 1, 0.9))
 
-	# --- 右: 状态 ---
+	# 栏2/3 分隔点
+	draw_circle(Vector2(pill_x + seg_w * 2, pill_y + pill_h * 0.5), 1.5 * s, Color(1, 1, 1, 0.25))
+
+	# 栏3: 小人状态
 	var state_label := ""
 	if pet_fsm_node and pet_fsm_node.has_method("state_label"):
 		state_label = pet_fsm_node.state_label()
 	if state_label == "":
-		state_label = "😊 发呆中"
-	var dot_pulse := (sin(_time * 3.0) + 1.0) * 0.5
-	draw_circle(Vector2(b_right, b_cy), 6 * s,
-		Color(0.4, 0.9, 0.6, 0.6 + dot_pulse * 0.4))
-	draw_string(_cjk_font, Vector2(b_right + 18 * s, b_cy + 6 * s), state_label,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 18 * s, Color.WHITE)
+		state_label = "😌 发呆"
+	var s3x := pill_x + seg_w * 2.5
+	# 呼吸点
+	var dot_pulse := (sin(_time * 2.5) + 1.0) * 0.5
+	draw_circle(Vector2(s3x - _cjk_font.get_string_size(state_label, HORIZONTAL_ALIGNMENT_CENTER, -1, 15 * s).x * 0.5 - 8 * s, pill_y + pill_h * 0.5),
+		4 * s, Color(0.4, 0.9, 0.6, 0.5 + dot_pulse * 0.4))
+	draw_string(_cjk_font, Vector2(s3x, pill_y + pill_h * 0.5 + 6 * s),
+		state_label, HORIZONTAL_ALIGNMENT_CENTER, seg_w - 10 * s, 15 * s, Color(1, 1, 1, 0.9))
 
-	# ==================== 演示模式标记 (左上角小角标) ====================
+	# ==================== 演示模式标记 (右上角小角标) ====================
 	if _demo_enabled:
-		var tag := "DEMO"
-		var tag_size := 13 * s
+		var tag := "演示"
+		var tag_size := 12 * s
 		var tag_w := _cjk_font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size).x
-		var tag_rect := Rect2(pad + 6 * s, pad + 6 * s, tag_w + 14 * s, tag_size + 8 * s)
-		_draw_glass_card(tag_rect, 0.9)
-		var pulse := 0.6 + sin(_time * 4.0) * 0.4
-		draw_string(_cjk_font, tag_rect.position + Vector2(7 * s, tag_size + 3 * s), tag,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size, Color(1.0, 0.8, 0.3, pulse))
+		var tag_rect := Rect2(vp_w - tag_w - 28 * s, 24 * s, tag_w + 16 * s, tag_size + 10 * s)
+		_draw_glass_pill(tag_rect, 0.85)
+		var pulse := 0.6 + sin(_time * 3.0) * 0.3
+		draw_string(_cjk_font, Vector2(tag_rect.position.x + 8 * s, tag_rect.position.y + tag_size + 5 * s), tag,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size, Color(1.0, 0.82, 0.35, pulse))
 
-	# ==================== 操作提示 ====================
-	if _time < 7.0:
-		var hint_a := clampf((7.0 - _time) / 2.5, 0.0, 1.0)
-		var hint := "👆点屏幕互动 · 点城市⇄切换 · 长按城市🛰GPS定位 · 长按趴下 · 双击转圈"
-		var hint_size := 16 * s
+	# ==================== 操作提示 (首次启动几秒) ====================
+	if _time < 6.0:
+		var hint_a := clampf((6.0 - _time) / 2.0, 0.0, 1.0)
+		var hint := "点城市切换  ·  长按城市GPS定位  ·  点小人互动"
+		var hint_size := 14 * s
 		var hint_w := _cjk_font.get_string_size(hint, HORIZONTAL_ALIGNMENT_CENTER, -1, hint_size).x
 		var hx := (vp_w - hint_w) * 0.5
-		var hy := viewport_size.y - pad - bot_h - 18 * s
-		var cap := Rect2(hx - 16 * s, hy - hint_size, hint_w + 32 * s, hint_size + 16 * s)
-		_draw_glass_card(cap, hint_a)
+		var hy := pill_y - 22 * s
+		var cap := Rect2(hx - 14 * s, hy - hint_size, hint_w + 28 * s, hint_size + 12 * s)
+		_draw_glass_pill(cap, hint_a * 0.9)
 		draw_string(_cjk_font, Vector2(hx, hy), hint,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, hint_size, Color(1, 1, 1, hint_a))
+			HORIZONTAL_ALIGNMENT_LEFT, -1, hint_size, Color(1, 1, 1, hint_a * 0.9))
 
 func _draw_glass_card(rect: Rect2, alpha: float = 1.0):
 	draw_round_rect(rect, Color(0.05, 0.08, 0.15, 0.5 * alpha), 16.0)
 	var top_strip := Rect2(rect.position + Vector2(0, 1), Vector2(rect.size.x, rect.size.y * 0.5))
 	draw_round_rect(top_strip, Color(1, 1, 1, 0.06 * alpha), 16.0)
 	_draw_round_rect_border(rect, Color(1, 1, 1, 0.2 * alpha), 16.0, 1.5)
+
+# 苹果风格毛玻璃胶囊 (更柔和: 大圆角 + 轻背景 + 内发光)
+func _draw_glass_pill(rect: Rect2, alpha: float = 1.0):
+	var r := rect.size.y * 0.5  # 完全圆角 (胶囊形)
+	# 主体: 极淡的玻璃感
+	draw_round_rect(rect, Color(1, 1, 1, 0.12 * alpha), r)
+	# 内层高光 (顶部)
+	var top_strip := Rect2(rect.position + Vector2(0, 0.5), Vector2(rect.size.x, rect.size.y * 0.45))
+	draw_round_rect(top_strip, Color(1, 1, 1, 0.08 * alpha), r)
+	# 细边框
+	_draw_round_rect_border(rect, Color(1, 1, 1, 0.18 * alpha), r, 1.0)
 
 func _draw_battery_icon(pos: Vector2, percent: int, charging: bool, s: float):
 	var bw := 32.0 * s
