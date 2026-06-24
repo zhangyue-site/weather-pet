@@ -21,8 +21,10 @@ var _sprite: Sprite2D = null
 var _model_root: Node3D = null
 var _anim_player: AnimationPlayer = null
 var _model_ready: bool = false
-var _target_rotation_y: float = 0.0
+var _target_rotation_y: float = 0.0  # 状态控制的目标朝向
 var _current_rotation_y: float = 0.0
+# 模型固有朝向修正 (Godot Plush 正脸朝向偏移)
+# PI=180° 表示模型正面在背面, 需翻转; 0=正面朝相机
 
 func _ready():
 	_build_3d_viewport()
@@ -111,30 +113,39 @@ func _load_model():
 # ============================================================
 
 func _customize_appearance(root: Node3D):
-	# 1. 调色: 把原版 Godot 蓝 调成更柔和的晴天蓝
-	_apply_tint_to_materials(root)
+	# 1. 多彩上色: 不同身体部位不同颜色
+	_apply_multicolor_materials(root)
 	# 2. 3D 装饰物: 腮红 + 天气胸章
 	_add_blush_decal(root)
 	_add_weather_badge(root)
 
-func _apply_tint_to_materials(node: Node):
-	# 遍历所有 MeshInstance3D, 给材质加色相微调 (让蓝色偏青绿一点, 更"晴天")
+func _apply_multicolor_materials(node: Node):
+	# 多彩方案: 遍历 MeshInstance3D, 给每个 surface 上不同颜色
+	# primitive[0] = 主体(头+身) → 暖白/奶黄
+	# primitive[1,2] = 手臂 → 暖橙
+	# 用 OverrideMaterial 覆盖, 不依赖原贴图 (颜色更纯净多彩)
+	var body_color := Color(1.0, 0.96, 0.88)   # 奶白色 (头身)
+	var arm_color := Color(0.95, 0.65, 0.45)   # 暖橙色 (手臂)
+	var colors := [body_color, arm_color, arm_color]
+	_color_meshes(node, colors, 0)
+
+func _color_meshes(node: Node, colors: Array, idx: int) -> int:
+	# 遍历所有 MeshInstance3D, 按 surface 顺序依次上色; 返回更新后的 idx
+	var cur := idx
 	for child in node.get_children():
 		if child is MeshInstance3D:
 			var mi: MeshInstance3D = child
 			for i in range(mi.get_surface_override_material_count()):
-				var mat = mi.get_active_material(i)
-				if mat is StandardMaterial3D:
-					var smat: StandardMaterial3D = mat.duplicate()
-					# 微调: 增加饱和度感 (albedo_color 颜色混合)
-					smat.albedo_color = smat.albedo_color.lerp(Color(0.5, 0.75, 0.95), 0.25)
-					mi.set_surface_override_material(i, smat)
-				elif mat is ShaderMaterial:
-					var smat2: ShaderMaterial = mat.duplicate()
-					# 着色器材质: 注入色调偏移 (如果有 albedo_texture)
-					smat2.set_shader_parameter("tint_color", Color(0.6, 0.82, 1.0, 0.0))
-					mi.set_surface_override_material(i, smat2)
-		_apply_tint_to_materials(child)
+				var color: Color = colors[cur % colors.size()]
+				var mat := StandardMaterial3D.new()
+				mat.albedo_color = color
+				mat.roughness = 0.6
+				mat.specular = 0.5
+				mat.metallic = 0.0
+				mi.set_surface_override_material(i, mat)
+				cur += 1
+		cur = _color_meshes(child, colors, cur)
+	return cur
 
 func _add_blush_decal(root: Node3D):
 	# 用两个半透明红色 SphereMesh 当腮红, 贴在脸颊位置
@@ -216,8 +227,8 @@ func _find_anim_player(node: Node) -> AnimationPlayer:
 func _process(delta: float):
 	if not _model_ready:
 		return
-	# 平滑旋转 (转向目标方向)
-	_current_rotation_y = _lerp_angle(_current_rotation_y, _target_rotation_y, delta * 5.0)
+	# 平滑旋转 (朝向修正 + 状态控制)
+	_current_rotation_y = _lerp_angle(_current_rotation_y, _face_offset_runtime + _target_rotation_y, delta * 5.0)
 	if _model_root:
 		_model_root.rotation.y = _current_rotation_y
 	# 行走时轻微上下浮动
@@ -288,3 +299,11 @@ func face_right():
 
 func face_front():
 	_target_rotation_y = deg_to_rad(0)
+
+## 设置朝向修正偏移 (供设置面板调用, 修正模型默认朝向)
+func set_face_offset(degrees: float):
+	# 直接改运行时常量等价物: 用单独变量
+	_face_offset_runtime = deg_to_rad(degrees)
+	_current_rotation_y = _face_offset_runtime  # 立即生效
+
+var _face_offset_runtime: float = 0.0

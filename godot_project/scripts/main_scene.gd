@@ -39,6 +39,11 @@ var _demo_enabled: bool = false
 # 点击区域记录 (用于点击城市卡片切换)
 var _city_card_rect: Rect2 = Rect2()
 
+# 设置面板
+var _settings_open: bool = false
+var _settings_rect: Rect2 = Rect2()
+var _settings_tab: int = 0  # 0=城市 1=小人 2=关于
+
 var cityscape_node: Node2D = null
 var weather_fx_node: Node2D = null
 var prop_system_node: Node2D = null
@@ -141,6 +146,11 @@ func _draw():
 	_draw_touch_particles()
 	# HUD 最上层
 	_draw_hud(viewport_size)
+	# 右上角设置按钮
+	_draw_settings_button(viewport_size)
+	# 设置面板 (打开时)
+	if _settings_open:
+		_draw_settings_panel(viewport_size)
 
 # ============================================================
 #  背景
@@ -489,14 +499,25 @@ func _on_release(pos: Vector2):
 	if moved > 50.0 * _scale_factor:
 		return
 
-	# 优先: 点击城市卡片 → 切换城市
+	# 设置面板已打开: 处理面板内点击
+	if _settings_open:
+		_handle_settings_tap(pos)
+		_spawn_ripple(pos, Color(0.6, 0.9, 1.0))
+		return
+
+	var vp := get_viewport_rect().size
+	# 右上角长按 → 打开设置面板
+	var settings_btn := Rect2(vp.x - 60 * _scale_factor, 20 * _scale_factor, 44 * _scale_factor, 44 * _scale_factor)
+	if settings_btn.has_point(pos) and dt >= 0.5:
+		_settings_open = !_settings_open
+		_spawn_ripple(pos, Color(0.6, 0.9, 1.0))
+		return
+
 	# 优先: 点击/长按城市卡片
 	if _city_card_rect.has_point(pos):
 		if dt >= 0.55:
-			# 长按城市卡片 → 切回 GPS 实时定位
 			_switch_to_gps()
 		else:
-			# 点击城市卡片 → 切换到下一个预设城市 (自定义位置)
 			_switch_city()
 		_spawn_ripple(pos, Color(1.0, 0.85, 0.3))
 		return
@@ -673,3 +694,239 @@ func draw_ellipse(center: Vector2, radii: Vector2, color: Color):
 		var angle := TAU * float(s_i) / float(steps)
 		points.append(center + Vector2(cos(angle) * radii.x, sin(angle) * radii.y))
 	draw_colored_polygon(points, color)
+
+# ============================================================
+#  设置面板 (右上角 ⚙ 长按打开)
+# ============================================================
+
+# 右上角设置按钮 (齿轮图标)
+func _draw_settings_button(viewport_size: Vector2):
+	var s := _scale_factor
+	var bx := viewport_size.x - 52 * s
+	var by := 26 * s
+	var r := 18 * s
+	# 圆形背景
+	draw_circle(Vector2(bx, by), r, Color(1, 1, 1, 0.15))
+	# 齿轮 (简化: 中心圆 + 8个小点)
+	draw_circle(Vector2(bx, by), r * 0.35, Color(1, 1, 1, 0.9))
+	for i in range(8):
+		var a := i * PI / 4
+		var px := bx + cos(a) * r * 0.65
+		var py := by + sin(a) * r * 0.65
+		draw_circle(Vector2(px, py), r * 0.12, Color(1, 1, 1, 0.7))
+
+# 设置面板 (居中半透明卡片)
+func _draw_settings_panel(viewport_size: Vector2):
+	var s := _scale_factor
+	var pw := minf(viewport_size.x - 40 * s, 340 * s)
+	var ph := minf(viewport_size.y - 100 * s, 480 * s)
+	var px := (viewport_size.x - pw) * 0.5
+	var py := (viewport_size.y - ph) * 0.5
+	_settings_rect = Rect2(px, py, pw, ph)
+
+	# 半透明遮罩
+	draw_rect(Rect2(0, 0, viewport_size.x, viewport_size.y), Color(0, 0, 0, 0.4), true)
+	# 面板卡片
+	draw_round_rect(_settings_rect, Color(0.08, 0.1, 0.16, 0.95), 20 * s)
+	_draw_round_rect_border(_settings_rect, Color(1, 1, 1, 0.15), 20 * s, 1.0)
+
+	var cx := px + pw * 0.5
+	var cur_y := py + 20 * s
+
+	# 标题
+	draw_string(_cjk_font, Vector2(cx, cur_y + 24 * s), "⚙ 设置",
+		HORIZONTAL_ALIGNMENT_CENTER, pw, 22 * s, Color.WHITE)
+	cur_y += 40 * s
+
+	# Tab 栏 (城市 | 小人 | 关于)
+	var tab_w := pw / 3.0
+	var tab_names: Array[String] = ["🏙 城市", "🤖 小人", "ℹ 关于"]
+	for i in range(3):
+		var tab_name: String = tab_names[i]
+		var tx := px + tab_w * i
+		var active := (i == _settings_tab)
+		var tab_col := Color(0.2, 0.6, 1.0, 0.3) if active else Color(1, 1, 1, 0.08)
+		draw_rect(Rect2(tx + 4 * s, cur_y, tab_w - 8 * s, 32 * s), tab_col, true)
+		draw_string(_cjk_font, Vector2(tx + tab_w * 0.5, cur_y + 22 * s), tab_name,
+			HORIZONTAL_ALIGNMENT_CENTER, tab_w, 14 * s,
+			Color.WHITE if active else Color(1, 1, 1, 0.6))
+	cur_y += 44 * s
+
+	# 分隔线
+	draw_line(Vector2(px + 20 * s, cur_y), Vector2(px + pw - 20 * s, cur_y),
+		Color(1, 1, 1, 0.1), 1.0)
+	cur_y += 16 * s
+
+	# Tab 内容
+	match _settings_tab:
+		0: cur_y = _draw_settings_city(px, cur_y, pw, s)
+		1: cur_y = _draw_settings_pet(px, cur_y, pw, s)
+		2: cur_y = _draw_settings_about(px, cur_y, pw, s)
+
+	# 底部关闭按钮
+	var close_y := py + ph - 50 * s
+	var close_rect := Rect2(cx - 60 * s, close_y, 120 * s, 36 * s)
+	draw_round_rect(close_rect, Color(0.9, 0.3, 0.3, 0.7), 18 * s)
+	draw_string(_cjk_font, Vector2(close_rect.position.x + 60 * s, close_rect.position.y + 24 * s),
+		"关闭", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 16 * s, Color.WHITE)
+
+# Tab 0: 城市切换
+func _draw_settings_city(px: float, y: float, pw: float, s: float) -> float:
+	var cur := y
+	draw_string(_cjk_font, Vector2(px + 24 * s, cur + 20 * s), "选择城市 (点击切换)",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 15 * s, Color(0.7, 0.8, 0.95))
+	cur += 32 * s
+	if data and data.has_method("get_city_names"):
+		var names: PackedStringArray = data.get_city_names()
+		var current_city: String = String(data.city_name) if "city_name" in data else ""
+		var cols := 3
+		var btn_w := (pw - 48 * s) / cols
+		var btn_h := 38 * s
+		for i in range(names.size()):
+			var col := i % cols
+			var row := i / cols
+			var bx := px + 24 * s + col * btn_w
+			var byy := cur + row * (btn_h + 6 * s)
+			var active := (names[i] == current_city)
+			var col2 := Color(0.2, 0.6, 1.0, 0.35) if active else Color(1, 1, 1, 0.08)
+			draw_round_rect(Rect2(bx + 2 * s, byy, btn_w - 4 * s, btn_h), col2, 10 * s)
+			draw_string(_cjk_font, Vector2(bx + btn_w * 0.5, byy + 24 * s), names[i],
+				HORIZONTAL_ALIGNMENT_CENTER, btn_w, 15 * s, Color.WHITE)
+		cur += (names.size() / cols + 1) * (btn_h + 6 * s)
+	# GPS 按钮
+	cur += 10 * s
+	var gps_rect := Rect2(px + 24 * s, cur, pw - 48 * s, 40 * s)
+	draw_round_rect(gps_rect, Color(0.3, 0.7, 0.4, 0.5), 12 * s)
+	draw_string(_cjk_font, Vector2(px + pw * 0.5, cur + 26 * s), "🛰 使用 GPS 实时定位",
+		HORIZONTAL_ALIGNMENT_CENTER, pw, 16 * s, Color.WHITE)
+	return cur + 50 * s
+
+# Tab 1: 小人朝向调整
+func _draw_settings_pet(px: float, y: float, pw: float, s: float) -> float:
+	var cur := y
+	draw_string(_cjk_font, Vector2(px + 24 * s, cur + 20 * s), "小人朝向 (脸不对就调整)",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 15 * s, Color(0.7, 0.8, 0.95))
+	cur += 36 * s
+	# 朝向按钮: ← 0° → ← 90° ← 180° ← 270°
+	var dirs := [
+		{"deg": 0.0, "label": "正脸\n0°"},
+		{"deg": 90.0, "label": "右转\n90°"},
+		{"deg": 180.0, "label": "背对\n180°"},
+		{"deg": 270.0, "label": "左转\n270°"},
+	]
+	var btn_w := (pw - 48 * s) / 4.0
+	for i in range(dirs.size()):
+		var bx := px + 24 * s + i * btn_w
+		draw_round_rect(Rect2(bx + 2 * s, cur, btn_w - 4 * s, 50 * s),
+			Color(1, 1, 1, 0.1), 10 * s)
+		draw_string(_cjk_font, Vector2(bx + btn_w * 0.5, cur + 22 * s), dirs[i]["label"],
+			HORIZONTAL_ALIGNMENT_CENTER, btn_w, 12 * s, Color(0.9, 0.95, 1.0))
+	cur += 62 * s
+	# 动画预览按钮
+	draw_string(_cjk_font, Vector2(px + 24 * s, cur + 20 * s), "动画演示",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 15 * s, Color(0.7, 0.8, 0.95))
+	cur += 32 * s
+	var anims := ["idle", "wave", "walk", "fall"]
+	for i in range(anims.size()):
+		var bx := px + 24 * s + i * ((pw - 48 * s) / 4.0)
+		var btn_rect := Rect2(bx + 2 * s, cur, (pw - 48 * s) / 4.0 - 4 * s, 36 * s)
+		draw_round_rect(btn_rect, Color(1, 1, 1, 0.1), 10 * s)
+		draw_string(_cjk_font, Vector2(bx + btn_rect.size.x * 0.5 + 2 * s, cur + 23 * s), anims[i],
+			HORIZONTAL_ALIGNMENT_CENTER, btn_rect.size.x, 13 * s, Color(0.9, 0.95, 1.0))
+	cur += 46 * s
+	return cur
+
+# Tab 2: 关于/状态
+func _draw_settings_about(px: float, y: float, pw: float, s: float) -> float:
+	var cur := y
+	var lines := []
+	if data:
+		var w: Dictionary = data.current_weather if typeof(data.current_weather) == TYPE_DICTIONARY else {}
+		lines.append("天气: %s  %.0f°C" % [String(w.get("condition", "?")), float(w.get("temperature", 0))])
+		lines.append("城市: %s (%s)" % [String(data.city_name), String(data.location_mode)])
+		lines.append("时间: %02d:%02d" % [int(data.current_hour), int(data.current_minute)])
+		lines.append("电量: %d%%%s" % [int(data.battery_percent), " 充电中" if data.is_charging else ""])
+		lines.append("信号: %d 级" % int(data.phone_signal))
+		lines.append("演示模式: %s" % ("开启" if _demo_enabled else "关闭"))
+	lines.append("模型: Godot Plush (MIT)")
+	lines.append("天气: 和风天气 API")
+	for line in lines:
+		draw_string(_cjk_font, Vector2(px + 24 * s, cur + 20 * s), line,
+			HORIZONTAL_ALIGNMENT_LEFT, pw - 48 * s, 14 * s, Color(0.8, 0.88, 0.98))
+		cur += 26 * s
+	return cur
+
+# 设置面板点击处理
+func _handle_settings_tap(pos: Vector2):
+	var s := _scale_factor
+	# 关闭按钮
+	var close_y := _settings_rect.end.y - 50 * s
+	var close_rect := Rect2(_settings_rect.position.x + _settings_rect.size.x * 0.5 - 60 * s, close_y, 120 * s, 36 * s)
+	if close_rect.has_point(pos):
+		_settings_open = false
+		return
+	# 点面板外也关闭
+	if not _settings_rect.has_point(pos):
+		_settings_open = false
+		return
+
+	var pw := _settings_rect.size.x
+	var px := _settings_rect.position.x
+	# Tab 栏位置
+	var tab_y := _settings_rect.position.y + 60 * s
+	var tab_w := pw / 3.0
+	if pos.y >= tab_y and pos.y <= tab_y + 32 * s:
+		for i in range(3):
+			var tx := px + tab_w * i
+			if pos.x >= tx and pos.x <= tx + tab_w:
+				_settings_tab = i
+				return
+	# Tab 内容点击
+	var content_y := tab_y + 44 * s + 16 * s
+	match _settings_tab:
+		0: _handle_city_tap(pos, px, content_y, pw, s)
+		1: _handle_pet_tap(pos, px, content_y, pw, s)
+
+func _handle_city_tap(pos: Vector2, px: float, y: float, pw: float, s: float):
+	if not data:
+		return
+	var cur := y + 32 * s
+	if data.has_method("get_city_names"):
+		var names: PackedStringArray = data.get_city_names()
+		var cols := 3
+		var btn_w := (pw - 48 * s) / cols
+		var btn_h := 38 * s
+		for i in range(names.size()):
+			var col := i % cols
+			var row := i / cols
+			var bx := px + 24 * s + col * btn_w
+			var byy := cur + row * (btn_h + 6 * s)
+			if Rect2(bx + 2 * s, byy, btn_w - 4 * s, btn_h).has_point(pos):
+				data.set_city_by_name(names[i])
+				return
+		cur += (names.size() / cols + 1) * (btn_h + 6 * s) + 10 * s
+	# GPS 按钮
+	var gps_rect := Rect2(px + 24 * s, cur, pw - 48 * s, 40 * s)
+	if gps_rect.has_point(pos) and data.has_method("switch_to_gps"):
+		data.switch_to_gps()
+
+func _handle_pet_tap(pos: Vector2, px: float, y: float, pw: float, s: float):
+	# 朝向按钮 (4个)
+	var cur := y + 36 * s
+	var btn_w := (pw - 48 * s) / 4.0
+	var dirs := [0.0, 90.0, 180.0, 270.0]
+	for i in range(4):
+		var bx := px + 24 * s + i * btn_w
+		if Rect2(bx + 2 * s, cur, btn_w - 4 * s, 50 * s).has_point(pos):
+			if pet_renderer_node and pet_renderer_node.has_method("set_face_offset"):
+				pet_renderer_node.set_face_offset(dirs[i])
+			return
+	cur += 62 * s + 32 * s
+	# 动画按钮
+	var anims := ["idle", "wave", "walk", "fall"]
+	for i in range(4):
+		var bx := px + 24 * s + i * btn_w
+		if Rect2(bx + 2 * s, cur, btn_w - 4 * s, 36 * s).has_point(pos):
+			if pet_renderer_node and pet_renderer_node.has_method("play_anim"):
+				pet_renderer_node.play_anim(anims[i])
+			return

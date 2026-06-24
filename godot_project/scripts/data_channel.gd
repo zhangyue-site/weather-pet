@@ -34,7 +34,7 @@ var current_weather: Dictionary = {
 	"humidity": 50.0,
 	"wind_speed": 5.0
 }
-var city_name: String = "深圳"
+var city_name: String = "北京"
 var phone_signal: int = 4
 var battery_percent: int = 85
 var is_charging: bool = false
@@ -61,7 +61,7 @@ const PRESET_CITIES: Array[Dictionary] = [
 	{"name": "香港", "lon": 114.17, "lat": 22.32},
 	{"name": "台北", "lon": 121.56, "lat": 25.03}
 ]
-var _city_index: int = 2  # 默认深圳
+var _city_index: int = 0  # 默认北京
 
 func _ready():
 	http = HTTPRequest.new()
@@ -70,7 +70,7 @@ func _ready():
 
 	_connect_plugin()
 	_update_system_time()
-	feed_weather('{"condition":"clear","temperature":22,"humidity":50,"wind_speed":5,"city_name":"深圳"}')
+	feed_weather('{"condition":"clear","temperature":22,"humidity":50,"wind_speed":5,"city_name":"北京"}')
 	_feed_local_festival()
 
 	if plugin_ref == null:
@@ -221,7 +221,7 @@ func _push_demo():
 		"humidity": 50.0,
 		"wind_speed": 5.0
 	}
-	city_name = "深圳"
+	city_name = "北京"
 	phone_signal = 4
 	battery_percent = 85
 	is_charging = false

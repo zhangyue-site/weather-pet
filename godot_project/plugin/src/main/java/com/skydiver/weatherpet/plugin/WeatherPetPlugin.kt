@@ -45,8 +45,8 @@ class WeatherPetPlugin(godot: Godot) : GodotPlugin(godot) {
 
     // 位置模式: true=GPS实时定位, false=自定义位置
     private var useGps: Boolean = true
-    private var customCoord: String = "114.05,22.55"   // 自定义经纬度
-    private var customCity: String = "深圳"             // 自定义城市名
+    private var customCoord: String = "116.41,39.92"  // 默认北京坐标
+    private var customCity: String = "北京"
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
@@ -240,11 +240,11 @@ class WeatherPetPlugin(godot: Godot) : GodotPlugin(godot) {
         if (!hasLocationPermission()) {
             // 无权限: 先申请, 申请后会在下次 refreshWeather 时重试; 当前先用默认
             requestLocationPermission()
-            fetchWeatherAndCity("114.05,22.55", "深圳")
+            fetchWeatherAndCity("116.41,39.92", "北京")
             return
         }
         val client = fusedLocationClient ?: run {
-            fetchWeatherAndCity("114.05,22.55", "深圳"); return
+            fetchWeatherAndCity("116.41,39.92", "北京"); return
         }
         try {
             client.lastLocation
@@ -260,7 +260,7 @@ class WeatherPetPlugin(godot: Godot) : GodotPlugin(godot) {
                 }
                 .addOnFailureListener { requestSingleLocation() }
         } catch (e: SecurityException) {
-            fetchWeatherAndCity("114.05,22.55", "深圳")
+            fetchWeatherAndCity("116.41,39.92", "北京")
         }
     }
 
@@ -280,7 +280,7 @@ class WeatherPetPlugin(godot: Godot) : GodotPlugin(godot) {
                         emitLocation(loc.longitude, loc.latitude, "gps")
                         fetchWeatherAndCity(coord, "")
                     } else {
-                        fetchWeatherAndCity("114.05,22.55", "深圳")
+                        fetchWeatherAndCity("116.41,39.92", "北京")
                     }
                 }
             }
@@ -344,7 +344,7 @@ class WeatherPetPlugin(godot: Godot) : GodotPlugin(godot) {
     private fun sendWeatherDemo(coord: String) {
         val payload = JSONObject().apply {
             put("condition", "clear"); put("temperature", 22.0); put("humidity", 50.0)
-            put("wind_speed", 5.0); put("city_name", "深圳"); put("raw_text", "")
+            put("wind_speed", 5.0); put("city_name", "北京"); put("raw_text", "")
         }
         emitSignal("on_weather", payload.toString())
     }
