@@ -38,40 +38,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _demoIndex = 0;
   int _catIndex = 0;
 
-  // 完整演示场景: 天气 × 时间 × 猫咪动作
+  // 完整演示场景: 季节 × 天气 × 时间 × 猫咪动作
   static const _demoScenes = [
-    // === 早晨 ===
-    {'hour': 6, 'min': 30, 'weather': 'clear', 'temp': 18.0, 'cat': 1, 'state': 'idle', 'label': '🌅 清晨晴天'},
-    {'hour': 7, 'min': 0, 'weather': 'clear', 'temp': 20.0, 'cat': 2, 'state': 'eating', 'label': '🍳 早餐时间'},
-    {'hour': 7, 'min': 30, 'weather': 'cloudy', 'temp': 19.0, 'cat': 3, 'state': 'walking', 'label': '⛅ 多云散步'},
-    // === 上午 ===
-    {'hour': 9, 'min': 0, 'weather': 'clear', 'temp': 24.0, 'cat': 4, 'state': 'walking', 'label': '☀️ 上午晴天'},
-    {'hour': 10, 'min': 0, 'weather': 'drizzle', 'temp': 20.0, 'cat': 5, 'state': 'rainUmbrella', 'label': '🌦 小雨撑伞'},
-    {'hour': 11, 'min': 0, 'weather': 'rain', 'temp': 18.0, 'cat': 6, 'state': 'rainUmbrella', 'label': '🌧 中雨撑伞'},
-    // === 中午 ===
-    {'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 28.0, 'cat': 7, 'state': 'eating', 'label': '🍽 午饭时间'},
-    {'hour': 13, 'min': 0, 'weather': 'clear', 'temp': 32.0, 'cat': 1, 'state': 'idle', 'label': '☀️ 午后晴'},
-    // === 下午 ===
-    {'hour': 14, 'min': 0, 'weather': 'heavy_rain', 'temp': 16.0, 'cat': 2, 'state': 'stormScared', 'label': '🌧 大雨害怕'},
-    {'hour': 15, 'min': 0, 'weather': 'thunderstorm', 'temp': 14.0, 'cat': 3, 'state': 'stormScared', 'label': '⛈ 雷暴发抖'},
-    {'hour': 16, 'min': 0, 'weather': 'snow', 'temp': -2.0, 'cat': 4, 'state': 'snowCatch', 'label': '❄️ 下雪接雪花'},
-    {'hour': 17, 'min': 0, 'weather': 'fog', 'temp': 10.0, 'cat': 5, 'state': 'fogWander', 'label': '🌫 雾中溜达'},
-    // === 傍晚 ===
-    {'hour': 18, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 6, 'state': 'idle', 'label': '🌇 傍晚晴'},
-    {'hour': 19, 'min': 0, 'weather': 'wind', 'temp': 15.0, 'cat': 7, 'state': 'windLean', 'label': '💨 大风吹'},
-    // === 夜晚 ===
-    {'hour': 20, 'min': 0, 'weather': 'clear', 'temp': 12.0, 'cat': 1, 'state': 'idle', 'label': '🌙 晚上晴'},
-    {'hour': 21, 'min': 0, 'weather': 'clear', 'temp': 10.0, 'cat': 2, 'state': 'sleeping', 'label': '😴 夜深了'},
-    {'hour': 23, 'min': 0, 'weather': 'clear', 'temp': 8.0, 'cat': 3, 'state': 'sleeping', 'label': '🌙 深夜'},
-    // === 极端天气 ===
-    {'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 38.0, 'cat': 4, 'state': 'hotMelt', 'label': '🥵 热化了'},
-    {'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 2.0, 'cat': 5, 'state': 'coldShiver', 'label': '🥶 冷得发抖'},
-    {'hour': 12, 'min': 0, 'weather': 'haze', 'temp': 15.0, 'cat': 6, 'state': 'fogWander', 'label': '🌫 霾天'},
-    // === 互动 ===
-    {'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 7, 'state': 'waving', 'label': '👋 招手'},
-    {'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 1, 'state': 'jumping', 'label': '🤸 跳跃'},
-    {'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 2, 'state': 'spinning', 'label': '🌀 转圈'},
-    {'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 3, 'state': 'playDead', 'label': '💫 趴下'},
+    // === 🌸 春天 ===
+    {'season': 'spring', 'hour': 7, 'min': 0, 'weather': 'clear', 'temp': 16.0, 'cat': 1, 'state': 'idle', 'label': '🌸 春日清晨'},
+    {'season': 'spring', 'hour': 9, 'min': 0, 'weather': 'drizzle', 'temp': 14.0, 'cat': 2, 'state': 'rainUmbrella', 'label': '🌧 春雨绵绵'},
+    {'season': 'spring', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 3, 'state': 'walking', 'label': '🌸 春暖花开'},
+    {'season': 'spring', 'hour': 15, 'min': 0, 'weather': 'cloudy', 'temp': 18.0, 'cat': 4, 'state': 'idle', 'label': '⛅ 春日多云'},
+    {'season': 'spring', 'hour': 18, 'min': 0, 'weather': 'clear', 'temp': 15.0, 'cat': 5, 'state': 'idle', 'label': '🌇 春天傍晚'},
+    // === ☀️ 夏天 ===
+    {'season': 'summer', 'hour': 6, 'min': 0, 'weather': 'clear', 'temp': 26.0, 'cat': 6, 'state': 'idle', 'label': '☀️ 夏日清晨'},
+    {'season': 'summer', 'hour': 10, 'min': 0, 'weather': 'clear', 'temp': 32.0, 'cat': 7, 'state': 'walking', 'label': '🥵 夏天散步'},
+    {'season': 'summer', 'hour': 14, 'min': 0, 'weather': 'thunderstorm', 'temp': 28.0, 'cat': 1, 'state': 'stormScared', 'label': '⛈ 夏雷阵阵'},
+    {'season': 'summer', 'hour': 17, 'min': 0, 'weather': 'clear', 'temp': 30.0, 'cat': 2, 'state': 'idle', 'label': '🍉 夏日傍晚'},
+    {'season': 'summer', 'hour': 21, 'min': 0, 'weather': 'clear', 'temp': 25.0, 'cat': 3, 'state': 'sleeping', 'label': '🌙 夏夜乘凉'},
+    // === 🍂 秋天 ===
+    {'season': 'autumn', 'hour': 7, 'min': 0, 'weather': 'fog', 'temp': 12.0, 'cat': 4, 'state': 'fogWander', 'label': '🌫 秋日晨雾'},
+    {'season': 'autumn', 'hour': 10, 'min': 0, 'weather': 'clear', 'temp': 18.0, 'cat': 5, 'state': 'walking', 'label': '🍂 秋高气爽'},
+    {'season': 'autumn', 'hour': 13, 'min': 0, 'weather': 'wind', 'temp': 14.0, 'cat': 6, 'state': 'windLean', 'label': '💨 秋风萧瑟'},
+    {'season': 'autumn', 'hour': 16, 'min': 0, 'weather': 'rain', 'temp': 10.0, 'cat': 7, 'state': 'rainUmbrella', 'label': '🌧 秋雨绵绵'},
+    {'season': 'autumn', 'hour': 19, 'min': 0, 'weather': 'clear', 'temp': 8.0, 'cat': 1, 'state': 'idle', 'label': '🌇 秋天傍晚'},
+    // === ❄️ 冬天 ===
+    {'season': 'winter', 'hour': 7, 'min': 0, 'weather': 'snow', 'temp': -5.0, 'cat': 2, 'state': 'snowCatch', 'label': '❄️ 冬日初雪'},
+    {'season': 'winter', 'hour': 10, 'min': 0, 'weather': 'snow', 'temp': -8.0, 'cat': 3, 'state': 'snowFight', 'label': '⛄ 打雪仗'},
+    {'season': 'winter', 'hour': 13, 'min': 0, 'weather': 'clear', 'temp': -2.0, 'cat': 4, 'state': 'coldShiver', 'label': '🥶 冬日暖阳'},
+    {'season': 'winter', 'hour': 16, 'min': 0, 'weather': 'heavy_rain', 'temp': -10.0, 'cat': 5, 'state': 'stormScared', 'label': '🌨 暴风雪'},
+    {'season': 'winter', 'hour': 20, 'min': 0, 'weather': 'clear', 'temp': -6.0, 'cat': 6, 'state': 'sleeping', 'label': '🌙 冬夜漫长'},
+    // === 🎮 互动 ===
+    {'season': 'spring', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 7, 'state': 'waving', 'label': '👋 招手'},
+    {'season': 'summer', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 28.0, 'cat': 1, 'state': 'jumping', 'label': '🤸 跳跃'},
+    {'season': 'autumn', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 15.0, 'cat': 2, 'state': 'spinning', 'label': '🌀 转圈'},
+    {'season': 'winter', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': -3.0, 'cat': 3, 'state': 'playDead', 'label': '💫 趴下'},
+    // === 🔥 极端 ===
+    {'season': 'summer', 'hour': 14, 'min': 0, 'weather': 'clear', 'temp': 40.0, 'cat': 4, 'state': 'hotMelt', 'label': '🥵 40°热化了'},
+    {'season': 'winter', 'hour': 6, 'min': 0, 'weather': 'clear', 'temp': -20.0, 'cat': 5, 'state': 'coldShiver', 'label': '🥶 -20°冻僵了'},
+    {'season': 'autumn', 'hour': 10, 'min': 0, 'weather': 'haze', 'temp': 12.0, 'cat': 6, 'state': 'fogWander', 'label': '🌫 霾天'},
   ];
 
   @override
@@ -168,6 +169,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     else if (hour < 22) period = '傍晚';
     else period = '深夜';
 
+    final season = scene['season'] ?? 'spring';
+    final seasonEmoji = {'spring': '🌸', 'summer': '☀️', 'autumn': '🍂', 'winter': '❄️'}[season] ?? '';
+
     setState(() {
       _weather = WeatherData(condition: condition, temperature: temp, humidity: 50, windSpeed: 5, cityName: '北京');
       _demoHour = hour;
@@ -260,27 +264,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // 天空颜色根据时间变化
+  // 天空颜色根据季节+时间变化
   Color _skyTopColor() {
     final h = _isDemoMode ? _demoHour : DateTime.now().hour;
+    final season = _isDemoMode ? (_demoScenes[_demoIndex]['season'] ?? 'spring') : _currentSeason();
     if (h < 5) return const Color(0xFF0A0A2E);
-    if (h < 7) return const Color(0xFF2A3A6E);
-    if (h < 9) return const Color(0xFF5B8CC5);
-    if (h < 17) return const Color(0xFF4A90D9);
-    if (h < 19) return const Color(0xFFE87040);
+    if (h < 7) return season == 'winter' ? const Color(0xFF1A2040) : const Color(0xFF2A3A6E);
+    if (h < 9) return season == 'autumn' ? const Color(0xFF6B5B4E) : const Color(0xFF5B8CC5);
+    if (h < 17) {
+      switch (season) {
+        case 'spring': return const Color(0xFF5BA0D9);
+        case 'summer': return const Color(0xFF3A80C9);
+        case 'autumn': return const Color(0xFF6B8BAE);
+        case 'winter': return const Color(0xFF8AAAC0);
+        default: return const Color(0xFF4A90D9);
+      }
+    }
+    if (h < 19) return season == 'autumn' ? const Color(0xFFC06030) : const Color(0xFFE87040);
     if (h < 21) return const Color(0xFF3A2A6E);
     return const Color(0xFF0A0A2E);
   }
 
   Color _skyBottomColor() {
     final h = _isDemoMode ? _demoHour : DateTime.now().hour;
+    final season = _isDemoMode ? (_demoScenes[_demoIndex]['season'] ?? 'spring') : _currentSeason();
     if (h < 5) return const Color(0xFF1A1A4E);
-    if (h < 7) return const Color(0xFFE8956D);
-    if (h < 9) return const Color(0xFFB0D4F1);
-    if (h < 17) return const Color(0xFF87CEEB);
-    if (h < 19) return const Color(0xFFFF8C49);
+    if (h < 7) return season == 'winter' ? const Color(0xFF405060) : const Color(0xFFE8956D);
+    if (h < 9) return season == 'autumn' ? const Color(0xFFD4A574) : const Color(0xFFB0D4F1);
+    if (h < 17) {
+      switch (season) {
+        case 'spring': return const Color(0xFFA8D8EA);
+        case 'summer': return const Color(0xFF87CEEB);
+        case 'autumn': return const Color(0xFFC4A882);
+        case 'winter': return const Color(0xFFD0D8E0);
+        default: return const Color(0xFF87CEEB);
+      }
+    }
+    if (h < 19) return season == 'autumn' ? const Color(0xFFE8A060) : const Color(0xFFFF8C49);
     if (h < 21) return const Color(0xFF1A1A3E);
     return const Color(0xFF1A1A4E);
+  }
+
+  String _currentSeason() {
+    final month = DateTime.now().month;
+    if (month >= 3 && month <= 5) return 'spring';
+    if (month >= 6 && month <= 8) return 'summer';
+    if (month >= 9 && month <= 11) return 'autumn';
+    return 'winter';
   }
 
   bool _isNightTime() {
@@ -425,7 +455,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final timeStr = _isDemoMode
         ? '${_demoHour.toString().padLeft(2, '0')}:${_demoMinute.toString().padLeft(2, '0')}'
         : '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
-    final period = _isDemoMode ? _demoPeriod : _timePeriod(DateTime.now().hour);
+    final season = _isDemoMode ? (_demoScenes[_demoIndex]['season'] ?? 'spring') : _currentSeason();
+    final seasonEmoji = {'spring': '🌸', 'summer': '☀️', 'autumn': '🍂', 'winter': '❄️'}[season] ?? '';
+    final period = _isDemoMode ? '$seasonEmoji $_demoPeriod' : _timePeriod(DateTime.now().hour);
 
     return SafeArea(
       child: Padding(
