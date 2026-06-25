@@ -3,11 +3,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
-import 'package:rive/rive.dart';
 import '../models/weather.dart';
 import '../services/weather_service.dart';
 import '../services/location_service.dart';
 import '../services/phone_service.dart';
+import '../widgets/rive_pet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,11 +28,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _weatherAnim = 'assets/animations/weather_clear.json';
   bool _showWeatherOverlay = false;
   bool _useRive = true; // 优先使用 Rive
-
-  // Rive
-  RiveAnimationController? _riveController;
-  Artboard? _riveArtboard;
-  String _riveAnimName = 'idle';
 
   // 时间
   int _demoHour = 8;
@@ -103,23 +98,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _loadRiveAnimation() {
-    try {
-      final file = RiveFile.asset('assets/rive/cat2.riv');
-      _riveArtboard = file.mainArtboard;
-      _riveController = SimpleAnimation('idle', autoplay: true);
-      _riveArtboard!.addController(_riveController!);
-    } catch (e) {
-      _useRive = false;
-    }
-  }
-
-  void _switchRiveAnimation(String animName) {
-    if (_riveArtboard == null || _riveController == null) return;
-    if (animName == _riveAnimName) return;
-    _riveAnimName = animName;
-    _riveController!.dispose();
-    _riveController = SimpleAnimation(animName, autoplay: true);
-    _riveArtboard!.addController(_riveController!);
+    // Rive 动画通过 RiveAnimation.asset 直接加载，无需预加载
   }
 
   Future<void> _initApp() async {
@@ -156,18 +135,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } catch (e) {
       _startDemoMode();
     }
-  }
-
-  void _startPhoneMonitoring() {
-    // 模拟手机状态变化
-    _phoneTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (!_isDemoMode) {
-        setState(() {
-          _batteryPercent = 50 + Random().nextInt(50);
-          _connectionType = ['wifi', 'data'][Random().nextInt(2)];
-        });
-      }
-    });
   }
 
   // 模拟来电话
@@ -325,24 +292,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     else if (hour < 20) { newState = PetState.idle; }
     else { newState = PetState.sleeping; }
 
-    // 更新 Rive 动画
-    _switchRiveAnimation(_mapStateToRive(newState));
-
     setState(() { _petState = newState; });
-  }
-
-  String _mapStateToRive(PetState state) {
-    const map = {
-      PetState.idle: 'idle',
-      PetState.walking: 'walk',
-      PetState.sleeping: 'sleep',
-      PetState.eating: 'eat',
-      PetState.waving: 'wave',
-      PetState.jumping: 'jump',
-      PetState.fogWander: 'walk',
-      PetState.festival: 'wave',
-    };
-    return map[state] ?? 'idle';
   }
 
   void _onPetTap() {
@@ -368,7 +318,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _stateTimer?.cancel();
     _fastDemoTimer?.cancel();
     _phoneService.stopMonitoring();
-    _riveController?.dispose();
     super.dispose();
   }
 
@@ -475,8 +424,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   offset: Offset(offsetX, offsetY),
                   child: SizedBox(
                     width: 200, height: 200,
-                    child: _useRive && _riveArtboard != null
-                        ? RiveAnimation.artboard(_riveArtboard!, fit: BoxFit.contain)
+                    child: _useRive
+                        ? RivePet(
+                            state: _petState,
+                            onTap: _onPetTap,
+                            onLongPress: _onPetLongPress,
+                            onDoubleTap: _onPetDoubleTap,
+                          )
                         : Lottie.asset(_catLottieAnim, fit: BoxFit.contain, repeat: true, animate: true),
                   ),
                 );
