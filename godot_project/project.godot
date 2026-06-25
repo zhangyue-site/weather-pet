@@ -34,7 +34,7 @@ window/size/window_height_override=960
 window/size/resizable=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
-window/handheld/orientation=1
+window/handheld/orientation=0
 
 [gdextensions]
 
