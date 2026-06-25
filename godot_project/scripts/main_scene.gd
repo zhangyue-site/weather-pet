@@ -8,7 +8,10 @@ extends Node2D
 #  - 演示模式开关 + 城市手动切换
 # ============================================================
 
-var _scale_factor: float = 1.0
+const DW := 1080.0
+const DH := 1920.0
+const DS := 2.09
+
 var _time: float = 0.0
 
 var _top_bg_color: Color = Color(0.1, 0.1, 0.15)
@@ -54,7 +57,6 @@ var pet_fsm_node: Node = null
 
 func _ready():
 	_init_font()
-	_scale_factor = 2.09
 	_instantiate_subsystems()
 	_layout_scene_once()
 	set_process_input(true)
@@ -125,7 +127,7 @@ func _process(delta: float):
 	queue_redraw()
 
 func _draw():
-	var viewport_size := get_viewport_rect().size
+	var viewport_size := Vector2(DW, DH)
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		return
 
@@ -269,7 +271,7 @@ func _layout_scene_once():
 func _draw_hud(viewport_size: Vector2):
 	if not data:
 		return
-	var s := _scale_factor
+	var s := DS
 	var vp_w := viewport_size.x
 	var vp_h := viewport_size.y
 
@@ -481,7 +483,7 @@ func _on_release(pos: Vector2):
 	var dt := _time - _touch_down_time
 	var moved := pos.distance_to(_touch_down_pos)
 	# 滑动判定
-	if moved > 50.0 * _scale_factor:
+	if moved > 50.0 * DS:
 		return
 
 	# 设置面板已打开: 处理面板内点击
@@ -490,9 +492,9 @@ func _on_release(pos: Vector2):
 		_spawn_ripple(pos, Color(0.6, 0.9, 1.0))
 		return
 
-	var vp := get_viewport_rect().size
+	var vp := Vector2(DW, DH)
 	# 右上角长按 → 打开设置面板
-	var settings_btn := Rect2(vp.x - 60 * _scale_factor, 20 * _scale_factor, 44 * _scale_factor, 44 * _scale_factor)
+	var settings_btn := Rect2(vp.x - 60 * DS, 20 * DS, 44 * DS, 44 * DS)
 	if settings_btn.has_point(pos) and dt >= 0.5:
 		_settings_open = !_settings_open
 		_spawn_ripple(pos, Color(0.6, 0.9, 1.0))
@@ -547,8 +549,8 @@ func _trigger_touch(type: String, pos: Vector2):
 func _spawn_ripple(pos: Vector2, color: Color):
 	_ripples.append({
 		"pos": pos,
-		"r": 8.0 * _scale_factor,
-		"max_r": 70.0 * _scale_factor,
+		"r": 8.0 * DS,
+		"max_r": 70.0 * DS,
 		"life": 0.6,
 		"max_life": 0.6,
 		"col": color
@@ -569,7 +571,7 @@ func _spawn_touch_particles(pos: Vector2, type: String):
 			base_col = Color(0.6, 0.9, 1.0)
 	for i in range(count):
 		var ang := randf_range(0, TAU)
-		var spd := randf_range(60, 140) * _scale_factor
+		var spd := randf_range(60, 140) * DS
 		_touch_particles.append({
 			"pos": pos,
 			"vel": Vector2(cos(ang), sin(ang)) * spd,
@@ -579,7 +581,7 @@ func _spawn_touch_particles(pos: Vector2, type: String):
 			"col": base_col,
 			"rot": randf_range(0, TAU),
 			"rot_vel": randf_range(-4, 4),
-			"size": randf_range(14, 22) * _scale_factor
+			"size": randf_range(14, 22) * DS
 		})
 
 func _update_touch_anim(delta: float):
@@ -590,7 +592,7 @@ func _update_touch_anim(delta: float):
 		if r["life"] <= 0.0:
 			continue
 		var t: float = 1.0 - float(r["life"]) / float(r["max_life"])
-		r["r"] = lerpf(8.0 * _scale_factor, r["max_r"], t)
+		r["r"] = lerpf(8.0 * DS, r["max_r"], t)
 		alive_rip.append(r)
 	_ripples = alive_rip
 
@@ -602,7 +604,7 @@ func _update_touch_anim(delta: float):
 			continue
 		p["pos"] += p["vel"] * delta
 		p["vel"] *= (1.0 - delta * 1.8)
-		p["vel"].y += 240.0 * delta * _scale_factor
+		p["vel"].y += 240.0 * delta * DS
 		p["rot"] += p["rot_vel"] * delta
 		alive.append(p)
 	_touch_particles = alive
@@ -613,9 +615,9 @@ func _draw_ripples():
 		var col: Color = r["col"]
 		# 涟漪圈
 		draw_arc(r["pos"], r["r"], 0, TAU, 32,
-			Color(col.r, col.g, col.b, a * 0.8), 3.0 * _scale_factor)
+			Color(col.r, col.g, col.b, a * 0.8), 3.0 * DS)
 		# 中心点
-		draw_circle(r["pos"], 4.0 * _scale_factor * a,
+		draw_circle(r["pos"], 4.0 * DS * a,
 			Color(col.r, col.g, col.b, a))
 
 func _draw_touch_particles():
@@ -686,7 +688,7 @@ func _draw_ellipse_shape(center: Vector2, radii: Vector2, color: Color):
 
 # 右上角设置按钮 (齿轮图标)
 func _draw_settings_button(viewport_size: Vector2):
-	var s := _scale_factor
+	var s := DS
 	var bx := viewport_size.x - 52 * s
 	var by := 26 * s
 	var r := 18 * s
@@ -702,7 +704,7 @@ func _draw_settings_button(viewport_size: Vector2):
 
 # 设置面板 (居中半透明卡片)
 func _draw_settings_panel(viewport_size: Vector2):
-	var s := _scale_factor
+	var s := DS
 	var pw := minf(viewport_size.x - 40 * s, 340 * s)
 	var ph := minf(viewport_size.y - 100 * s, 480 * s)
 	var px := (viewport_size.x - pw) * 0.5
@@ -843,7 +845,7 @@ func _draw_settings_about(px: float, y: float, pw: float, s: float) -> float:
 
 # 设置面板点击处理
 func _handle_settings_tap(pos: Vector2):
-	var s := _scale_factor
+	var s := DS
 	# 关闭按钮
 	var close_y := _settings_rect.end.y - 50 * s
 	var close_rect := Rect2(_settings_rect.position.x + _settings_rect.size.x * 0.5 - 60 * s, close_y, 120 * s, 36 * s)
