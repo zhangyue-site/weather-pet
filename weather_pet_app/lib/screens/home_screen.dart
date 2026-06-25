@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../models/weather.dart';
 import '../services/weather_service.dart';
 import '../services/location_service.dart';
-import '../widgets/pet_widget.dart';
 import '../widgets/weather_effects.dart';
 import '../widgets/hud_widget.dart';
 
@@ -23,9 +23,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _batteryPercent = 85;
   int _signalStrength = 4;
   double _animTime = 0;
+  String _currentAnim = 'assets/animations/idle.json';
 
   late AnimationController _timeController;
-  late AnimationController _stateController;
+  late AnimationController _bounceController;
+  late AnimationController _shakeController;
   Timer? _weatherTimer;
   Timer? _stateTimer;
 
@@ -48,10 +50,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
     });
 
-    _stateController = AnimationController(
+    _bounceController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
+      duration: const Duration(milliseconds: 500),
     );
+
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    )..repeat(reverse: true);
 
     _initApp();
   }
@@ -70,19 +77,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           position.longitude,
           position.latitude,
         );
-        final cityName = await WeatherService.fetchCityName(
-          position.longitude,
-          position.latitude,
-        );
         setState(() {
-          _weather = WeatherData(
-            condition: weather.condition,
-            temperature: weather.temperature,
-            humidity: weather.humidity,
-            windSpeed: weather.windSpeed,
-            cityName: cityName,
-            feelsLike: weather.feelsLike,
-          );
+          _weather = weather;
           _isDemoMode = false;
         });
       } else {
@@ -120,12 +116,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _startTimers() {
-    // 每 8 秒切换天气 (演示模式)
     _weatherTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (_isDemoMode) _updateDemoWeather();
     });
-
-    // 每 5-12 秒切换小人状态
     _scheduleNextState();
   }
 
@@ -142,58 +135,86 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final w = _weather;
 
     PetState newState;
+    String animFile;
 
     if (w.isStormy) {
       newState = PetState.stormScared;
+      animFile = 'assets/animations/idle.json';
     } else if (w.isRaining) {
       newState = PetState.rainUmbrella;
+      animFile = 'assets/animations/idle.json';
     } else if (w.isSnowing) {
       newState = Random().nextBool() ? PetState.snowCatch : PetState.snowFight;
+      animFile = 'assets/animations/wave.json';
     } else if (w.isFoggy) {
       newState = PetState.fogWander;
+      animFile = 'assets/animations/idle.json';
     } else if (w.isWindy) {
       newState = PetState.windLean;
+      animFile = 'assets/animations/idle.json';
     } else if (w.isHot) {
       newState = PetState.hotMelt;
+      animFile = 'assets/animations/idle.json';
     } else if (w.isCold) {
       newState = PetState.coldShiver;
+      animFile = 'assets/animations/idle.json';
     } else if (hour < 6) {
       newState = PetState.sleeping;
+      animFile = 'assets/animations/sleep.json';
     } else if (hour < 8) {
       newState = PetState.idle;
+      animFile = 'assets/animations/idle.json';
     } else if (hour < 12) {
       newState = PetState.walking;
+      animFile = 'assets/animations/idle.json';
     } else if (hour < 14) {
       newState = PetState.eating;
+      animFile = 'assets/animations/idle.json';
     } else if (hour < 18) {
       newState = PetState.walking;
+      animFile = 'assets/animations/idle.json';
     } else if (hour < 20) {
       newState = PetState.phoneScroll;
+      animFile = 'assets/animations/idle.json';
     } else {
       newState = PetState.sleeping;
+      animFile = 'assets/animations/sleep.json';
     }
 
-    setState(() => _petState = newState);
+    setState(() {
+      _petState = newState;
+      _currentAnim = animFile;
+    });
   }
 
   void _onPetTap() {
     setState(() {
       _petState = Random().nextBool() ? PetState.waving : PetState.jumping;
+      _currentAnim = _petState == PetState.waving
+          ? 'assets/animations/wave.json'
+          : 'assets/animations/jump.json';
     });
+    _bounceController.forward(from: 0);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) _updatePetState();
     });
   }
 
   void _onPetLongPress() {
-    setState(() => _petState = PetState.playDead);
+    setState(() {
+      _petState = PetState.playDead;
+      _currentAnim = 'assets/animations/idle.json';
+    });
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) _updatePetState();
     });
   }
 
   void _onPetDoubleTap() {
-    setState(() => _petState = PetState.spinning);
+    setState(() {
+      _petState = PetState.spinning;
+      _currentAnim = 'assets/animations/wave.json';
+    });
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) _updatePetState();
     });
@@ -202,7 +223,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _timeController.dispose();
-    _stateController.dispose();
+    _bounceController.dispose();
+    _shakeController.dispose();
     _weatherTimer?.cancel();
     _stateTimer?.cancel();
     super.dispose();
@@ -228,18 +250,65 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: _buildCityScape(),
           ),
 
-          // 小人
+          // 小人 (Lottie 动画)
           Center(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 80),
-              child: PetWidget(
-                state: _petState,
+              padding: const EdgeInsets.only(bottom: 60),
+              child: GestureDetector(
                 onTap: _onPetTap,
                 onLongPress: _onPetLongPress,
                 onDoubleTap: _onPetDoubleTap,
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_bounceController, _shakeController]),
+                  builder: (context, child) {
+                    double offsetY = 0;
+                    double offsetX = 0;
+
+                    // 弹跳效果
+                    if (_bounceController.isAnimating) {
+                      offsetY = -_bounceController.value * 30 * (1 - _bounceController.value);
+                    }
+
+                    // 状态特效
+                    switch (_petState) {
+                      case PetState.stormScared:
+                        offsetX = sin(_animTime * 20) * 5;
+                        break;
+                      case PetState.coldShiver:
+                        offsetX = sin(_animTime * 15) * 3;
+                        break;
+                      case PetState.windLean:
+                        offsetX = -8;
+                        break;
+                      case PetState.jumping:
+                        offsetY = -(sin(_animTime * 4)).abs() * 40;
+                        break;
+                      default:
+                        offsetY = sin(_animTime * 1.5) * 2;
+                    }
+
+                    return Transform.translate(
+                      offset: Offset(offsetX, offsetY),
+                      child: SizedBox(
+                        width: 200,
+                        height: 200,
+                        child: Lottie.asset(
+                          _currentAnim,
+                          fit: BoxFit.contain,
+                          repeat: true,
+                          animate: true,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
+
+          // 道具叠加 (雨伞等)
+          if (_petState == PetState.rainUmbrella)
+            _buildUmbrellaOverlay(),
 
           // HUD
           HudWidget(
@@ -282,9 +351,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ? const Color(0xFFFFD93D).withOpacity(0.8)
                       : Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
-                  ),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
                 child: Text(
                   _isDemoMode ? '🎮 演示' : '📍 GPS',
@@ -302,33 +369,92 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildUmbrellaOverlay() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 120),
+        child: CustomPaint(
+          size: const Size(160, 100),
+          painter: UmbrellaPainter(time: _animTime),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCityScape() {
     return CustomPaint(
-      size: Size(MediaQuery.of(context).size.width, 200),
+      size: Size(MediaQuery.of(context).size.width, 180),
       painter: CityScapePainter(isNight: DateTime.now().hour < 6 || DateTime.now().hour >= 20),
     );
   }
 }
 
+class UmbrellaPainter extends CustomPainter {
+  final double time;
+  UmbrellaPainter({required this.time});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    // 伞面
+    final umbrellaPath = Path()
+      ..moveTo(cx - 60, cy)
+      ..quadraticBezierTo(cx, cy - 50, cx + 60, cy)
+      ..close();
+    canvas.drawPath(umbrellaPath, Paint()..color = const Color(0xFF5B9BD5));
+    canvas.drawPath(
+      umbrellaPath,
+      Paint()..color = const Color(0xFF3A7BD5)..style = PaintingStyle.stroke..strokeWidth = 2,
+    );
+
+    // 伞柄
+    canvas.drawLine(
+      Offset(cx, cy - 35),
+      Offset(cx, cy + 40),
+      Paint()..color = const Color(0xFF8B6914)..strokeWidth = 3,
+    );
+
+    // 伞钩
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(cx + 7, cy + 40), width: 14, height: 14),
+      -pi / 2, pi, false,
+      Paint()..color = const Color(0xFF8B6914)..style = PaintingStyle.stroke..strokeWidth = 3,
+    );
+
+    // 雨滴
+    final dropPaint = Paint()..color = const Color(0xFF6CB4EE).withOpacity(0.5);
+    for (int i = 0; i < 5; i++) {
+      final dx = cx - 45 + i * 22;
+      final dy = cy + 5 + sin(time * 6 + i * 1.5) * 8;
+      canvas.drawOval(Rect.fromCenter(center: Offset(dx, dy), width: 3, height: 7), dropPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant UmbrellaPainter old) => true;
+}
+
 class CityScapePainter extends CustomPainter {
   final bool isNight;
-
   CityScapePainter({required this.isNight});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final groundPaint = Paint()
-      ..color = isNight ? const Color(0xFF0D1117) : const Color(0xFF2D5016);
+    // 地面
     canvas.drawRect(
       Rect.fromLTWH(0, size.height * 0.7, size.width, size.height * 0.3),
-      groundPaint,
+      Paint()..color = isNight ? const Color(0xFF0D1117) : const Color(0xFF2D5016),
     );
 
+    // 建筑
     final buildingPaint = Paint()
       ..color = isNight ? const Color(0xFF1A1A2E) : const Color(0xFF4A5568);
-
+    final windowPaint = Paint()..color = const Color(0xFFFFD93D).withOpacity(0.7);
     final random = Random(42);
     double x = 0;
+
     while (x < size.width) {
       final w = 30 + random.nextDouble() * 50;
       final h = 60 + random.nextDouble() * 100;
@@ -336,10 +462,7 @@ class CityScapePainter extends CustomPainter {
 
       canvas.drawRect(Rect.fromLTWH(x, y, w, h), buildingPaint);
 
-      // 窗户
       if (isNight) {
-        final windowPaint = Paint()
-          ..color = const Color(0xFFFFD93D).withOpacity(0.7);
         for (int row = 0; row < (h / 20).floor(); row++) {
           for (int col = 0; col < (w / 15).floor(); col++) {
             if (random.nextBool()) {
@@ -357,5 +480,5 @@ class CityScapePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CityScapePainter oldDelegate) => false;
+  bool shouldRepaint(covariant CityScapePainter old) => false;
 }
