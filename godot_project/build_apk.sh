@@ -7,10 +7,10 @@
 # ============================================================
 set -e
 
-PROJECT="${HOME}/Developer/mycode/天气APK小人/godot_project"
+PROJECT="${HOME}/生活自己的代码/weather-pet/godot_project"
 GODOT="/Applications/Godot.app/Contents/MacOS/Godot"
 SDK="$HOME/Library/Android/sdk"
-TEMPLATE_ZIP="$HOME/Library/Application Support/Godot/export_templates/4.4.stable/android_source.zip"
+TEMPLATE_ZIP="$HOME/Library/Application Support/Godot/export_templates/4.6.3.stable/android_source.zip"
 GRADLE8=$(ls ~/.gradle/wrapper/dists/gradle-8.7-bin/*/gradle-8.7/bin/gradle 2>/dev/null | head -1)
 KEYSTORE="$HOME/.android/debug.keystore"
 
