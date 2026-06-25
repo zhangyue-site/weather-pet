@@ -1,34 +1,33 @@
 {
   "schema": "obs-code-wiki/v1",
   "version": 1,
-  "generatedAt": "2026-06-22T14:54:01.143Z",
+  "generatedAt": "2026-06-25T04:08:44.204Z",
   "freshness": {
     "mode": "full",
     "reason": "obs_index",
-    "syncMs": 1782140041143,
-    "nodes": 0,
-    "edges": 0
+    "syncMs": 1782360524204,
+    "nodes": 114,
+    "edges": 109
   },
   "project": {
-    "name": "天气APK小人",
-    "root": "${HOME}/Developer/mycode/天气APK小人",
-    "indexedAt": "2026-06-22 14:53:45"
+    "name": "weather-pet",
+    "root": "${HOME}/生活自己的代码/weather-pet",
+    "indexedAt": "2026-06-25 04:08:43"
   },
   "stats": {
-    "nodes": 1022,
-    "edges": 1774,
-    "files": 96,
+    "nodes": 114,
+    "edges": 109,
+    "files": 6,
     "connections": {
-      "calls": 1643,
+      "calls": 107,
       "hubsFound": 12,
-      "bridgesFound": 8,
-      "mainPathsFound": 5
+      "bridgesFound": 0,
+      "mainPathsFound": 3
     }
   },
   "languages": [
     "Java",
     "Kotlin",
-    "TypeScript",
     "Python"
   ],
   "frameworks": [],

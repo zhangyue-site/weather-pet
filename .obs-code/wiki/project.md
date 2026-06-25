@@ -1,24 +1,29 @@
-# Project: 天气APK小人
+---
+tags: [obs-code, project, overview]
+created: 2026-06-25
+source: obs-code
+project: weather-pet
+---
+# Project: weather-pet
 
-> 30-second orientation. Read `architecture.md` next for structure.
+> 30 秒了解项目。下一步读 [[architecture.md]]
 
-## At a glance
+## 概览
 
-- **Languages:** Java, Kotlin, TypeScript, Python
-- **Frameworks:** (none detected)
-- **Scale:** 1022 symbols · 1774 edges · 96 files
+- **语言:** Java, Kotlin, Python
+- **框架:** (none detected)
+- **规模:** 114 符号 · 109 边 · 6 文件
 
-## Key files (likely entry / config)
+## 关键文件（入口 / 配置）
 
-- `天气APK小人/small-screen-animation/index.ts`
-- `天气APK小人/small-screen-animation/src/App.tsx`
-- `天气APK小人/small-screen-animation/src/main.tsx`
-- `天气APK小人/zuqiuxiaojiang/src/cn_football_agent/cli.py`
+_(none detected — try `obs_thread` for entry discovery)_
 
-## Top-level structure (by indexed file count)
+## 顶层目录结构
 
-- `天气APK小人/` — 96 indexed files
+- `weather-pet/` — 6 indexed files
 
 ---
 
-_See `architecture.md` for layers and patterns. Read `AGENTS.md` for tool-selection guidance._
+- [[architecture.md]] — 架构分层和模式
+- [[connections.md]] — 调用图和核心链路
+- [[AGENTS.md]] — 工具选择指南

@@ -8,9 +8,9 @@ extends Node2D
 #  - 演示模式开关 + 城市手动切换
 # ============================================================
 
-const DW := 540.0
-const DH := 960.0
-const DS := 1.04
+const DW := 1280.0
+const DH := 720.0
+const DS := 0.78
 
 var _time: float = 0.0
 
@@ -39,8 +39,9 @@ var _last_tap_time: float = -10.0
 # 演示模式
 var _demo_enabled: bool = false
 
-# 点击区域记录 (用于点击城市卡片切换)
+# 点击区域记录
 var _city_card_rect: Rect2 = Rect2()
+var _demo_btn_rect: Rect2 = Rect2()
 
 # 设置面板
 var _settings_open: bool = false
@@ -253,16 +254,16 @@ func _layout_scene_once():
 	if cityscape_node:
 		cityscape_node.position = Vector2.ZERO
 	if weather_fx_node:
-		weather_fx_node.position = Vector2(270, 144)
+		weather_fx_node.position = Vector2(640, 108)
 	if pet_renderer_node:
-		var pet_base := Vector2(270, 555)
+		var pet_base := Vector2(640, 416)
 		if pet_renderer_node.has_method("set_base_position"):
 			pet_renderer_node.call("set_base_position", pet_base)
 		else:
 			pet_renderer_node.position = pet_base
-		pet_renderer_node.scale = Vector2.ONE * 1.07
+		pet_renderer_node.scale = Vector2.ONE * 0.8
 	if prop_system_node:
-		prop_system_node.position = Vector2(270, 555)
+		prop_system_node.position = Vector2(640, 416)
 
 # ============================================================
 #  信息 HUD (苹果风格: 顶部居中天气 + 底部毛玻璃状态栏)
@@ -317,14 +318,16 @@ func _draw_hud(viewport_size: Vector2):
 	# --- 右侧: 温度 + 天气描述 ---
 	var temp_str := "%.0f°" % temp
 	var temp_size := 52 * s
-	draw_string(_cjk_font, Vector2(vp_w - margin, top_y + temp_size * 0.8), temp_str,
-		HORIZONTAL_ALIGNMENT_RIGHT, -1, temp_size, Color(1, 1, 1, 0.95))
+	var temp_w := _cjk_font.get_string_size(temp_str, HORIZONTAL_ALIGNMENT_LEFT, -1, temp_size).x
+	draw_string(_cjk_font, Vector2(vp_w - margin - temp_w, top_y + temp_size * 0.8), temp_str,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, temp_size, Color(1, 1, 1, 0.95))
 
 	var cond_text := cond_icon + " " + cond_label
 	var cond_size := 14 * s
 	var cond_y := top_y + temp_size + 4 * s
-	draw_string(_cjk_font, Vector2(vp_w - margin, cond_y + cond_size * 0.75), cond_text,
-		HORIZONTAL_ALIGNMENT_RIGHT, -1, cond_size, Color(1, 1, 1, 0.6))
+	var cond_w := _cjk_font.get_string_size(cond_text, HORIZONTAL_ALIGNMENT_LEFT, -1, cond_size).x
+	draw_string(_cjk_font, Vector2(vp_w - margin - cond_w, cond_y + cond_size * 0.75), cond_text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, cond_size, Color(1, 1, 1, 0.6))
 
 	# --- 中间: 体感 + 湿度 (小字, 居中) ---
 	var detail := "体感%.0f° 湿度%.0f%%" % [feels, hum]
@@ -375,16 +378,15 @@ func _draw_hud(viewport_size: Vector2):
 	draw_string(_cjk_font, Vector2(s3x, pill_y + pill_h * 0.5 + 6 * s),
 		state_label, HORIZONTAL_ALIGNMENT_CENTER, seg_w - 10 * s, 15 * s, Color(1, 1, 1, 0.9))
 
-	# ==================== 演示模式标记 (右上角小角标) ====================
-	if _demo_enabled:
-		var tag := "演示"
-		var tag_size := 12 * s
-		var tag_w := _cjk_font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size).x
-		var tag_rect := Rect2(vp_w - tag_w - 28 * s, 24 * s, tag_w + 16 * s, tag_size + 10 * s)
-		_draw_glass_pill(tag_rect, 0.85)
-		var pulse := 0.6 + sin(_time * 3.0) * 0.3
-		draw_string(_cjk_font, Vector2(tag_rect.position.x + 8 * s, tag_rect.position.y + tag_size + 5 * s), tag,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size, Color(1.0, 0.82, 0.35, pulse))
+	# ==================== 演示模式切换按钮 (左上角) ====================
+	var demo_label := "🎮 演示" if _demo_enabled else "🎮 真机"
+	var demo_size := 12 * s
+	var demo_w := _cjk_font.get_string_size(demo_label, HORIZONTAL_ALIGNMENT_LEFT, -1, demo_size).x
+	_demo_btn_rect = Rect2(margin - 4 * s, 14 * s, demo_w + 12 * s, demo_size + 8 * s)
+	var demo_col := Color(1.0, 0.82, 0.35, 0.8) if _demo_enabled else Color(0.6, 0.8, 1.0, 0.5)
+	_draw_glass_pill(_demo_btn_rect, 0.7)
+	draw_string(_cjk_font, Vector2(margin, 14 * s + demo_size + 2 * s), demo_label,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, demo_size, demo_col)
 
 	# ==================== 操作提示 (首次启动几秒) ====================
 	if _time < 6.0:
@@ -492,6 +494,12 @@ func _on_release(pos: Vector2):
 		_spawn_ripple(pos, Color(0.6, 0.9, 1.0))
 		return
 
+	# 优先: 演示模式切换按钮
+	if _demo_btn_rect.has_point(pos):
+		_toggle_demo_mode()
+		_spawn_ripple(pos, Color(0.6, 0.9, 1.0))
+		return
+
 	# 优先: 点击/长按城市卡片
 	if _city_card_rect.has_point(pos):
 		if dt >= 0.55:
@@ -510,6 +518,16 @@ func _on_release(pos: Vector2):
 	else:
 		_trigger_touch("tap", pos)
 		_last_tap_time = _time
+
+func _toggle_demo_mode():
+	_demo_enabled = !_demo_enabled
+	if data:
+		data._demo_mode = _demo_enabled
+		if _demo_enabled:
+			data.location_mode = "demo"
+		else:
+			data.location_mode = "gps"
+	_hud_flash = 0.8
 
 func _switch_city():
 	# 切换到下一个预设城市 (PC 演示 + 真机自定义位置 统一走 data_channel)
