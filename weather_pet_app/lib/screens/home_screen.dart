@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/weather.dart';
 import '../services/weather_service.dart';
 import '../services/location_service.dart';
@@ -20,59 +22,63 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _isFastDemo = false;
   bool _isLoading = true;
 
-  String _catAnim = 'assets/animations/cat1.json';
+  String _catAnim = 'assets/animations/cat3.json';
   String _weatherAnim = 'assets/animations/weather_clear.json';
   bool _showWeatherOverlay = false;
 
-  // 演示模式的时间 (模拟)
   int _demoHour = 8;
   int _demoMinute = 0;
   String _demoPeriod = '上午';
+
+  // 手机状态
+  String _connectionType = 'wifi'; // wifi / data / none
+  bool _isPhoneRinging = false;
+  bool _hasNewSms = false;
+  int _batteryPercent = 85;
+  bool _isCharging = false;
 
   late AnimationController _timeCtrl;
   late AnimationController _bounceCtrl;
   Timer? _stateTimer;
   Timer? _fastDemoTimer;
+  Timer? _phoneTimer;
   double _animTime = 0;
-
   int _demoIndex = 0;
-  int _catIndex = 0;
 
-  // 完整演示场景: 季节 × 天气 × 时间 × 猫咪动作
   static const _demoScenes = [
     // === 🌸 春天 ===
-    {'season': 'spring', 'hour': 7, 'min': 0, 'weather': 'clear', 'temp': 16.0, 'cat': 1, 'state': 'idle', 'label': '🌸 春日清晨'},
-    {'season': 'spring', 'hour': 9, 'min': 0, 'weather': 'drizzle', 'temp': 14.0, 'cat': 2, 'state': 'rainUmbrella', 'label': '🌧 春雨绵绵'},
-    {'season': 'spring', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 3, 'state': 'walking', 'label': '🌸 春暖花开'},
-    {'season': 'spring', 'hour': 15, 'min': 0, 'weather': 'cloudy', 'temp': 18.0, 'cat': 4, 'state': 'idle', 'label': '⛅ 春日多云'},
-    {'season': 'spring', 'hour': 18, 'min': 0, 'weather': 'clear', 'temp': 15.0, 'cat': 5, 'state': 'idle', 'label': '🌇 春天傍晚'},
+    {'season': 'spring', 'hour': 7, 'min': 0, 'weather': 'clear', 'temp': 16.0, 'state': 'idle', 'label': '🌸 春日清晨'},
+    {'season': 'spring', 'hour': 9, 'min': 0, 'weather': 'drizzle', 'temp': 14.0, 'state': 'rainUmbrella', 'label': '🌧 春雨绵绵'},
+    {'season': 'spring', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'state': 'walking', 'label': '🌸 春暖花开'},
+    {'season': 'spring', 'hour': 15, 'min': 0, 'weather': 'cloudy', 'temp': 18.0, 'state': 'idle', 'label': '⛅ 春日多云'},
+    {'season': 'spring', 'hour': 18, 'min': 0, 'weather': 'clear', 'temp': 15.0, 'state': 'idle', 'label': '🌇 春天傍晚'},
     // === ☀️ 夏天 ===
-    {'season': 'summer', 'hour': 6, 'min': 0, 'weather': 'clear', 'temp': 26.0, 'cat': 6, 'state': 'idle', 'label': '☀️ 夏日清晨'},
-    {'season': 'summer', 'hour': 10, 'min': 0, 'weather': 'clear', 'temp': 32.0, 'cat': 7, 'state': 'walking', 'label': '🥵 夏天散步'},
-    {'season': 'summer', 'hour': 14, 'min': 0, 'weather': 'thunderstorm', 'temp': 28.0, 'cat': 1, 'state': 'stormScared', 'label': '⛈ 夏雷阵阵'},
-    {'season': 'summer', 'hour': 17, 'min': 0, 'weather': 'clear', 'temp': 30.0, 'cat': 2, 'state': 'idle', 'label': '🍉 夏日傍晚'},
-    {'season': 'summer', 'hour': 21, 'min': 0, 'weather': 'clear', 'temp': 25.0, 'cat': 3, 'state': 'sleeping', 'label': '🌙 夏夜乘凉'},
+    {'season': 'summer', 'hour': 6, 'min': 0, 'weather': 'clear', 'temp': 26.0, 'state': 'idle', 'label': '☀️ 夏日清晨'},
+    {'season': 'summer', 'hour': 10, 'min': 0, 'weather': 'clear', 'temp': 32.0, 'state': 'walking', 'label': '🥵 夏天散步'},
+    {'season': 'summer', 'hour': 14, 'min': 0, 'weather': 'thunderstorm', 'temp': 28.0, 'state': 'stormScared', 'label': '⛈ 夏雷阵阵'},
+    {'season': 'summer', 'hour': 17, 'min': 0, 'weather': 'clear', 'temp': 30.0, 'state': 'idle', 'label': '🍉 夏日傍晚'},
+    {'season': 'summer', 'hour': 21, 'min': 0, 'weather': 'clear', 'temp': 25.0, 'state': 'sleeping', 'label': '🌙 夏夜乘凉'},
     // === 🍂 秋天 ===
-    {'season': 'autumn', 'hour': 7, 'min': 0, 'weather': 'fog', 'temp': 12.0, 'cat': 4, 'state': 'fogWander', 'label': '🌫 秋日晨雾'},
-    {'season': 'autumn', 'hour': 10, 'min': 0, 'weather': 'clear', 'temp': 18.0, 'cat': 5, 'state': 'walking', 'label': '🍂 秋高气爽'},
-    {'season': 'autumn', 'hour': 13, 'min': 0, 'weather': 'wind', 'temp': 14.0, 'cat': 6, 'state': 'windLean', 'label': '💨 秋风萧瑟'},
-    {'season': 'autumn', 'hour': 16, 'min': 0, 'weather': 'rain', 'temp': 10.0, 'cat': 7, 'state': 'rainUmbrella', 'label': '🌧 秋雨绵绵'},
-    {'season': 'autumn', 'hour': 19, 'min': 0, 'weather': 'clear', 'temp': 8.0, 'cat': 1, 'state': 'idle', 'label': '🌇 秋天傍晚'},
+    {'season': 'autumn', 'hour': 7, 'min': 0, 'weather': 'fog', 'temp': 12.0, 'state': 'fogWander', 'label': '🌫 秋日晨雾'},
+    {'season': 'autumn', 'hour': 10, 'min': 0, 'weather': 'clear', 'temp': 18.0, 'state': 'walking', 'label': '🍂 秋高气爽'},
+    {'season': 'autumn', 'hour': 13, 'min': 0, 'weather': 'wind', 'temp': 14.0, 'state': 'windLean', 'label': '💨 秋风萧瑟'},
+    {'season': 'autumn', 'hour': 16, 'min': 0, 'weather': 'rain', 'temp': 10.0, 'state': 'rainUmbrella', 'label': '🌧 秋雨绵绵'},
+    {'season': 'autumn', 'hour': 19, 'min': 0, 'weather': 'clear', 'temp': 8.0, 'state': 'idle', 'label': '🌇 秋天傍晚'},
     // === ❄️ 冬天 ===
-    {'season': 'winter', 'hour': 7, 'min': 0, 'weather': 'snow', 'temp': -5.0, 'cat': 2, 'state': 'snowCatch', 'label': '❄️ 冬日初雪'},
-    {'season': 'winter', 'hour': 10, 'min': 0, 'weather': 'snow', 'temp': -8.0, 'cat': 3, 'state': 'snowFight', 'label': '⛄ 打雪仗'},
-    {'season': 'winter', 'hour': 13, 'min': 0, 'weather': 'clear', 'temp': -2.0, 'cat': 4, 'state': 'coldShiver', 'label': '🥶 冬日暖阳'},
-    {'season': 'winter', 'hour': 16, 'min': 0, 'weather': 'heavy_rain', 'temp': -10.0, 'cat': 5, 'state': 'stormScared', 'label': '🌨 暴风雪'},
-    {'season': 'winter', 'hour': 20, 'min': 0, 'weather': 'clear', 'temp': -6.0, 'cat': 6, 'state': 'sleeping', 'label': '🌙 冬夜漫长'},
-    // === 🎮 互动 ===
-    {'season': 'spring', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'cat': 7, 'state': 'waving', 'label': '👋 招手'},
-    {'season': 'summer', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 28.0, 'cat': 1, 'state': 'jumping', 'label': '🤸 跳跃'},
-    {'season': 'autumn', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 15.0, 'cat': 2, 'state': 'spinning', 'label': '🌀 转圈'},
-    {'season': 'winter', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': -3.0, 'cat': 3, 'state': 'playDead', 'label': '💫 趴下'},
-    // === 🔥 极端 ===
-    {'season': 'summer', 'hour': 14, 'min': 0, 'weather': 'clear', 'temp': 40.0, 'cat': 4, 'state': 'hotMelt', 'label': '🥵 40°热化了'},
-    {'season': 'winter', 'hour': 6, 'min': 0, 'weather': 'clear', 'temp': -20.0, 'cat': 5, 'state': 'coldShiver', 'label': '🥶 -20°冻僵了'},
-    {'season': 'autumn', 'hour': 10, 'min': 0, 'weather': 'haze', 'temp': 12.0, 'cat': 6, 'state': 'fogWander', 'label': '🌫 霾天'},
+    {'season': 'winter', 'hour': 7, 'min': 0, 'weather': 'snow', 'temp': -5.0, 'state': 'snowCatch', 'label': '❄️ 冬日初雪'},
+    {'season': 'winter', 'hour': 10, 'min': 0, 'weather': 'snow', 'temp': -8.0, 'state': 'snowFight', 'label': '⛄ 打雪仗'},
+    {'season': 'winter', 'hour': 13, 'min': 0, 'weather': 'clear', 'temp': -2.0, 'state': 'coldShiver', 'label': '🥶 冬日暖阳'},
+    {'season': 'winter', 'hour': 16, 'min': 0, 'weather': 'heavy_rain', 'temp': -10.0, 'state': 'stormScared', 'label': '🌨 暴风雪'},
+    {'season': 'winter', 'hour': 20, 'min': 0, 'weather': 'clear', 'temp': -6.0, 'state': 'sleeping', 'label': '🌙 冬夜漫长'},
+    // === 📱 手机事件 ===
+    {'season': 'spring', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 22.0, 'state': 'waving', 'label': '📞 来电话了'},
+    {'season': 'summer', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 28.0, 'state': 'jumping', 'label': '💬 收到短信'},
+    {'season': 'autumn', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': 15.0, 'state': 'idle', 'label': '📶 信号弱'},
+    {'season': 'winter', 'hour': 12, 'min': 0, 'weather': 'clear', 'temp': -3.0, 'state': 'playDead', 'label': '🔌 充电中'},
+    // === 极端 ===
+    {'season': 'summer', 'hour': 14, 'min': 0, 'weather': 'clear', 'temp': 40.0, 'state': 'hotMelt', 'label': '🥵 40°热化了'},
+    {'season': 'winter', 'hour': 6, 'min': 0, 'weather': 'clear', 'temp': -20.0, 'state': 'coldShiver', 'label': '🥶 -20°冻僵了'},
+    {'season': 'autumn', 'hour': 10, 'min': 0, 'weather': 'haze', 'temp': 12.0, 'state': 'fogWander', 'label': '🌫 霾天'},
   ];
 
   @override
@@ -87,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Future<void> _initApp() async {
     await _loadWeather();
     _startTimers();
+    _startPhoneMonitoring();
     setState(() => _isLoading = false);
   }
 
@@ -102,6 +109,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } catch (e) {
       _startDemoMode();
     }
+  }
+
+  void _startPhoneMonitoring() {
+    // 模拟手机状态变化
+    _phoneTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!_isDemoMode) {
+        setState(() {
+          _batteryPercent = 50 + Random().nextInt(50);
+          _connectionType = ['wifi', 'data'][Random().nextInt(2)];
+        });
+      }
+    });
+  }
+
+  // 模拟来电话
+  void _simulatePhoneCall() {
+    setState(() { _isPhoneRinging = true; _petState = PetState.jumping; });
+    Future.delayed(const Duration(seconds: 5), () {
+      setState(() { _isPhoneRinging = false; });
+      if (!_isDemoMode) _updatePetState();
+    });
+  }
+
+  // 模拟来短信
+  void _simulateSms() {
+    setState(() { _hasNewSms = true; _petState = PetState.waving; });
+    Future.delayed(const Duration(seconds: 3), () {
+      setState(() { _hasNewSms = false; });
+      if (!_isDemoMode) _updatePetState();
+    });
   }
 
   void _startDemoMode() {
@@ -129,7 +166,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _nextDemoScene() {
     _demoIndex = (_demoIndex + 1) % _demoScenes.length;
-    _catIndex = (_catIndex + 1) % 7;
     _applyDemoScene();
   }
 
@@ -139,7 +175,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final minute = scene['min'] as int;
     final condition = scene['weather'] as String;
     final temp = scene['temp'] as double;
-    final catNum = _catIndex + 1;
     final stateName = scene['state'] as String;
 
     String weatherAnim;
@@ -161,9 +196,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       default: weatherAnim = 'assets/animations/weather_clear.json'; showOverlay = false;
     }
 
-    // 始终用同一个猫 (cat3.json)
-    final catFile = 'assets/animations/cat3.json';
-
     String period;
     if (hour < 6) period = '凌晨';
     else if (hour < 11) period = '上午';
@@ -175,12 +207,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final season = scene['season'] ?? 'spring';
     final seasonEmoji = {'spring': '🌸', 'summer': '☀️', 'autumn': '🍂', 'winter': '❄️'}[season] ?? '';
 
+    // 模拟手机事件
+    if (scene['label'].toString().contains('电话')) { _isPhoneRinging = true; }
+    else if (scene['label'].toString().contains('短信')) { _hasNewSms = true; }
+    else if (scene['label'].toString().contains('信号')) { _connectionType = 'none'; }
+    else if (scene['label'].toString().contains('充电')) { _isCharging = true; }
+    else { _isPhoneRinging = false; _hasNewSms = false; _isCharging = false; _connectionType = 'wifi'; }
+
     setState(() {
       _weather = WeatherData(condition: condition, temperature: temp, humidity: 50, windSpeed: 5, cityName: '北京');
       _demoHour = hour;
       _demoMinute = minute;
-      _demoPeriod = period;
-      _catAnim = catFile;  // 始终同一个猫
+      _demoPeriod = '$seasonEmoji $period';
       _weatherAnim = weatherAnim;
       _showWeatherOverlay = showOverlay;
       _petState = _stateFromName(stateName);
@@ -200,9 +238,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return map[name] ?? PetState.idle;
   }
 
-  void _startTimers() {
-    _scheduleNextState();
-  }
+  void _startTimers() { _scheduleNextState(); }
 
   void _scheduleNextState() {
     final delay = 5 + Random().nextInt(8);
@@ -217,7 +253,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final w = _weather;
     PetState newState;
 
-    if (w.isStormy) { newState = PetState.stormScared; }
+    if (_isPhoneRinging) { newState = PetState.jumping; }
+    else if (_hasNewSms) { newState = PetState.waving; }
+    else if (w.isStormy) { newState = PetState.stormScared; }
     else if (w.isRaining) { newState = PetState.rainUmbrella; }
     else if (w.isSnowing) { newState = Random().nextBool() ? PetState.snowCatch : PetState.snowFight; }
     else if (w.isFoggy) { newState = PetState.fogWander; }
@@ -232,17 +270,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     else if (hour < 20) { newState = PetState.idle; }
     else { newState = PetState.sleeping; }
 
-    setState(() {
-      _petState = newState;
-      _catAnim = 'assets/animations/cat3.json';  // 始终同一个猫
-    });
+    setState(() { _petState = newState; });
   }
 
   void _onPetTap() {
-    setState(() {
-      _petState = Random().nextBool() ? PetState.waving : PetState.jumping;
-      // 始终同一个猫
-    });
+    setState(() { _petState = _isPhoneRinging ? PetState.waving : PetState.jumping; });
     _bounceCtrl.forward(from: 0);
     Future.delayed(const Duration(seconds: 2), () { if (mounted && !_isDemoMode) _updatePetState(); });
   }
@@ -263,10 +295,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _bounceCtrl.dispose();
     _stateTimer?.cancel();
     _fastDemoTimer?.cancel();
+    _phoneTimer?.cancel();
     super.dispose();
   }
 
-  // 天空颜色根据季节+时间变化
   Color _skyTopColor() {
     final h = _isDemoMode ? _demoHour : DateTime.now().hour;
     final season = _isDemoMode ? (_demoScenes[_demoIndex]['season'] ?? 'spring') : _currentSeason();
@@ -324,99 +356,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 天空渐变 (随时间变化)
-          AnimatedContainer(
-            duration: const Duration(seconds: 1),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [_skyTopColor(), _skyBottomColor()],
-              ),
+      body: Stack(children: [
+        AnimatedContainer(
+          duration: const Duration(seconds: 1),
+          decoration: BoxDecoration(gradient: LinearGradient(
+            begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [_skyTopColor(), _skyBottomColor()],
+          )),
+        ),
+        if (_showWeatherOverlay)
+          Positioned.fill(child: ClipRect(child: IgnorePointer(
+            child: Opacity(opacity: 0.5,
+              child: Lottie.asset(_weatherAnim, fit: BoxFit.cover, repeat: true, animate: true)),
+          ))),
+        if (_isNightTime())
+          Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _StarPainter(_animTime)))),
+        if (_isNightTime())
+          Positioned(top: 60, right: 40, child: Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFFF5E6B8),
+              boxShadow: [BoxShadow(color: const Color(0xFFF5E6B8).withOpacity(0.3), blurRadius: 20, spreadRadius: 5)]),
+          )),
+        Positioned(bottom: 0, left: 0, right: 0, child: _buildCityScape()),
+        // 猫咪
+        Center(child: Padding(
+          padding: const EdgeInsets.only(bottom: 100),
+          child: GestureDetector(
+            onTap: _onPetTap,
+            onLongPress: _onPetLongPress,
+            onDoubleTap: _onPetDoubleTap,
+            child: AnimatedBuilder(
+              animation: _bounceCtrl,
+              builder: (context, child) {
+                double offsetY = 0, offsetX = 0;
+                if (_bounceCtrl.isAnimating) offsetY = -_bounceCtrl.value * 30 * (1 - _bounceCtrl.value);
+                switch (_petState) {
+                  case PetState.stormScared: offsetX = sin(_animTime * 20) * 5; break;
+                  case PetState.coldShiver: offsetX = sin(_animTime * 15) * 3; break;
+                  case PetState.windLean: offsetX = -8; break;
+                  case PetState.jumping: offsetY = -(sin(_animTime * 4)).abs() * 40; break;
+                  case PetState.walking: offsetX = sin(_animTime * 3) * 5; break;
+                  default: offsetY = sin(_animTime * 1.5) * 2;
+                }
+                return Transform.translate(
+                  offset: Offset(offsetX, offsetY),
+                  child: SizedBox(width: 200, height: 200,
+                    child: Lottie.asset(_catAnim, fit: BoxFit.contain, repeat: true, animate: true)),
+                );
+              },
             ),
           ),
-          // 天气 Lottie 特效 (ClipRect 限制在屏幕内)
-          if (_showWeatherOverlay)
-            Positioned.fill(
-              child: ClipRect(
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.5,
-                    child: Lottie.asset(
-                      _weatherAnim,
-                      fit: BoxFit.cover,
-                      repeat: true,
-                      animate: true,
-                      width: MediaQuery.of(context).size.width,
-                      height: MediaQuery.of(context).size.height,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          // 星星 (夜晚)
-          if (_isNightTime())
-            Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _StarPainter(_animTime)))),
-          // 月亮 (夜晚)
-          if (_isNightTime())
-            Positioned(
-              top: 60, right: 40,
-              child: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFFF5E6B8),
-                  boxShadow: [BoxShadow(color: const Color(0xFFF5E6B8).withOpacity(0.3), blurRadius: 20, spreadRadius: 5)],
-                ),
-              ),
-            ),
-          // 城市背景
-          Positioned(bottom: 0, left: 0, right: 0, child: _buildCityScape()),
-          // 猫咪
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 40),
-              child: GestureDetector(
-                onTap: _onPetTap,
-                onLongPress: _onPetLongPress,
-                onDoubleTap: _onPetDoubleTap,
-                child: AnimatedBuilder(
-                  animation: _bounceCtrl,
-                  builder: (context, child) {
-                    double offsetY = 0, offsetX = 0;
-                    if (_bounceCtrl.isAnimating) {
-                      offsetY = -_bounceCtrl.value * 30 * (1 - _bounceCtrl.value);
-                    }
-                    switch (_petState) {
-                      case PetState.stormScared: offsetX = sin(_animTime * 20) * 5; break;
-                      case PetState.coldShiver: offsetX = sin(_animTime * 15) * 3; break;
-                      case PetState.windLean: offsetX = -8; break;
-                      case PetState.jumping: offsetY = -(sin(_animTime * 4)).abs() * 40; break;
-                      default: offsetY = sin(_animTime * 1.5) * 2;
-                    }
-                    return Transform.translate(
-                      offset: Offset(offsetX, offsetY),
-                      child: SizedBox(
-                        width: 220, height: 220,
-                        child: Lottie.asset(_catAnim, fit: BoxFit.contain, repeat: true, animate: true),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-          // HUD
-          _buildHud(),
-          // 加载
-          if (_isLoading) const Center(child: CircularProgressIndicator(color: Colors.white)),
-          // 顶部按钮
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 16, right: 16,
-            child: Row(children: [
+        )),
+        // HUD
+        _buildHud(),
+        if (_isLoading) const Center(child: CircularProgressIndicator(color: Colors.white)),
+        // 顶部按钮
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          left: 16,
+          right: 16,
+          child: Row(
+            children: [
               _buildTopButton(
                 _isDemoMode ? '🎮 演示' : '📍 GPS',
                 _isDemoMode ? const Color(0xFFFFD93D) : Colors.white24,
@@ -425,94 +425,160 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               const SizedBox(width: 8),
               if (_isDemoMode)
                 _buildTopButton(
-                  _isFastDemo ? '⏸ 停止快演' : '⚡ 快速演示',
+                  _isFastDemo ? '⏸ 停止' : '⚡ 快演',
                   _isFastDemo ? const Color(0xFFFF6B6B) : const Color(0xFF6BCB77),
                   () { if (_isFastDemo) { _stopFastDemo(); } else { _startFastDemo(); } },
                 ),
+              const SizedBox(width: 8),
+              if (!_isDemoMode) ...[
+                _buildTopButton('📞', Colors.amber, _simulatePhoneCall),
+                const SizedBox(width: 4),
+                _buildTopButton('💬', Colors.lightBlue, _simulateSms),
+              ],
               const Spacer(),
               if (_isDemoMode)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(10)),
-                  child: Text('${_demoIndex + 1}/${_demoScenes.length}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${_demoIndex + 1}/${_demoScenes.length}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
                 ),
-            ]),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
+    ),
     );
   }
 
   Widget _buildTopButton(String label, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
-        ),
-        child: Text(label, style: TextStyle(
-          color: color == const Color(0xFFFFD93D) ? Colors.black87 : Colors.white,
-          fontSize: 12, fontWeight: FontWeight.w600,
-        )),
-      ),
-    );
+    return GestureDetector(onTap: onTap, child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: color.withOpacity(0.8), borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.2))),
+      child: Text(label, style: TextStyle(color: color == const Color(0xFFFFD93D) ? Colors.black87 : Colors.white,
+        fontSize: 12, fontWeight: FontWeight.w600)),
+    ));
   }
 
   Widget _buildHud() {
     final timeStr = _isDemoMode
         ? '${_demoHour.toString().padLeft(2, '0')}:${_demoMinute.toString().padLeft(2, '0')}'
         : '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
-    final season = _isDemoMode ? (_demoScenes[_demoIndex]['season'] ?? 'spring') : _currentSeason();
-    final seasonEmoji = {'spring': '🌸', 'summer': '☀️', 'autumn': '🍂', 'winter': '❄️'}[season] ?? '';
-    final period = _isDemoMode ? '$seasonEmoji $_demoPeriod' : _timePeriod(DateTime.now().hour);
+    final period = _isDemoMode ? _demoPeriod : _timePeriod(DateTime.now().hour);
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SizedBox(height: 36),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(timeStr, style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w300, color: Colors.white)),
-              Text('${_weather.cityName} · $period',
-                style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6))),
-            ]),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('${_weather.temperature.toStringAsFixed(0)}°',
-                style: const TextStyle(fontSize: 46, fontWeight: FontWeight.w200, color: Colors.white)),
-              Text('${_weather.conditionIcon} ${_weather.conditionLabel}',
-                style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6))),
-            ]),
+    return SafeArea(child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SizedBox(height: 36),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(timeStr, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w300, color: Colors.white)),
+            Text('${_weather.cityName} · $period', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6))),
           ]),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
-            ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-              Text(_petState.label, style: const TextStyle(color: Colors.white, fontSize: 13)),
-              Container(width: 1, height: 16, color: Colors.white.withOpacity(0.2)),
-              Text('$_demoPeriod · ${_weather.conditionLabel}',
-                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
-            ]),
-          ),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${_weather.temperature.toStringAsFixed(0)}°',
+              style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w200, color: Colors.white)),
+            Text('${_weather.conditionIcon} ${_weather.conditionLabel}',
+              style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6))),
+          ]),
         ]),
-      ),
-    );
+        const Spacer(),
+        // 手机状态指示器
+        _buildPhoneStatus(),
+        const SizedBox(height: 8),
+        // 底部状态栏
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _buildStatusItem(Icons.battery_std, '$_batteryPercent%', _batteryPercent > 20 ? const Color(0xFF66DD88) : const Color(0xFFFF6B6B)),
+            _buildDivider(),
+            _buildStatusItem(
+              _connectionType == 'wifi' ? Icons.wifi : (_connectionType == 'data' ? Icons.signal_cellular_alt : Icons.signal_cellular_off),
+              _connectionType == 'wifi' ? 'WiFi' : (_connectionType == 'data' ? '4G' : '无'),
+              _connectionType != 'none' ? Colors.white : const Color(0xFFFF6B6B),
+            ),
+            _buildDivider(),
+            Text(_petState.label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ]),
+        ),
+      ]),
+    ));
+  }
+
+  Widget _buildPhoneStatus() {
+    if (_isPhoneRinging) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(color: Colors.amber.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.phone_in_talk, color: Colors.black, size: 16),
+          SizedBox(width: 6),
+          Text('📞 来电话了！', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+        ]),
+      );
+    }
+    if (_hasNewSms) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(color: Colors.lightBlue.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.sms, color: Colors.white, size: 16),
+          SizedBox(width: 6),
+          Text('💬 新短信！', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+        ]),
+      );
+    }
+    if (_isCharging) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(color: Colors.green.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.battery_charging_full, color: Colors.white, size: 16),
+          SizedBox(width: 6),
+          Text('🔌 充电中', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+        ]),
+      );
+    }
+    if (_connectionType == 'none') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(color: Colors.orange.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.signal_cellular_off, color: Colors.white, size: 16),
+          SizedBox(width: 6),
+          Text('📶 信号弱', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+        ]),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildStatusItem(IconData icon, String text, Color color) {
+    return Row(children: [
+      Icon(icon, color: color, size: 16),
+      const SizedBox(width: 4),
+      Text(text, style: TextStyle(color: color, fontSize: 13)),
+    ]);
+  }
+
+  Widget _buildDivider() {
+    return Container(width: 1, height: 16, color: Colors.white.withOpacity(0.2));
   }
 
   Widget _buildCityScape() {
-    return CustomPaint(
-      size: Size(MediaQuery.of(context).size.width, 180),
-      painter: _CityPainter(isNight: _isNightTime()),
-    );
+    return CustomPaint(size: Size(MediaQuery.of(context).size.width, 180),
+      painter: _CityPainter(isNight: _isNightTime()));
   }
 
   String _timePeriod(int hour) {
@@ -524,7 +590,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 class _StarPainter extends CustomPainter {
   final double time;
   _StarPainter(this.time);
-
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
@@ -533,12 +598,10 @@ class _StarPainter extends CustomPainter {
       final x = r.nextDouble() * size.width;
       final y = r.nextDouble() * size.height * 0.5;
       final brightness = (sin(time * 1.5 + i * 0.7) + 1.0) * 0.5;
-      final sz = 1.0 + r.nextDouble() * 2.0;
       paint.color = Color.fromRGBO(255, 255, 230, brightness * 0.7);
-      canvas.drawCircle(Offset(x, y), sz, paint);
+      canvas.drawCircle(Offset(x, y), 1.0 + r.nextDouble() * 2.0, paint);
     }
   }
-
   @override
   bool shouldRepaint(covariant _StarPainter old) => true;
 }
@@ -546,7 +609,6 @@ class _StarPainter extends CustomPainter {
 class _CityPainter extends CustomPainter {
   final bool isNight;
   _CityPainter({required this.isNight});
-
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Rect.fromLTWH(0, size.height * 0.7, size.width, size.height * 0.3),
@@ -570,7 +632,6 @@ class _CityPainter extends CustomPainter {
       x += w + r.nextDouble() * 15;
     }
   }
-
   @override
   bool shouldRepaint(covariant _CityPainter old) => false;
 }
