@@ -11,6 +11,7 @@ enum PetState {
 	WAVE, JUMP, SPIN, PLAY_DEAD, FALL_DOWN, GET_UP,
 	FESTIVAL,
 	TILT_LEFT, TILT_RIGHT,
+	OVERCAST_IDLE, SANDSTORM_HUDDLE,
 }
 
 var current_state: PetState = PetState.IDLE
@@ -29,9 +30,8 @@ func _ready():
 func _process(delta: float):
 	state_time += delta
 	state_timer -= delta
-	# 临时交互动作 (挥手/跳跃/转圈/趴下等) 播放约 2.5 秒后自动回到环境态
 	if _is_transient(current_state) and state_time > 2.5:
-		current_state = PetState.IDLE  # 强制复位, 让 _evaluate_transitions 重新决策
+		current_state = PetState.IDLE
 		state_time = 0.0
 		state_timer = 0.0
 	_evaluate_transitions()
@@ -96,6 +96,12 @@ func _evaluate_transitions():
 	if weather == "fog" or weather == "haze":
 		try_transition(PetState.FOG_WANDER, 0)
 		return
+	if weather == "sandstorm":
+		try_transition(PetState.SANDSTORM_HUDDLE, 0)
+		return
+	if weather == "overcast":
+		try_transition(PetState.OVERCAST_IDLE, 0)
+		return
 	if weather == "windy" and wind > 30:
 		try_transition(PetState.WIND_LEAN, 0)
 		return
@@ -148,29 +154,26 @@ func _evaluate_transitions():
 
 func try_transition(new_state: PetState, min_duration: float):
 	if new_state == current_state: return
-	# state_timer > 0 表示当前状态有锁定时长, 未到不切换 (防抖核心)
 	if state_timer > 0: return
-	# 优先级保护: 高优先级(天气/电量/节日)可打断低优先级(时间表)
 	var cur_prio := _state_priority(current_state)
 	var new_prio := _state_priority(new_state)
-	# 同优先级或更低优先级: 需满足 min_duration
 	if new_prio <= cur_prio:
 		if current_state != PetState.IDLE and state_time < min_duration:
 			return
 	enter_state(new_state)
-	# 环境态设置持续时长 (5-12秒), 避免边界抖动
 	if not _is_transient(new_state):
 		state_timer = randf_range(6.0, 12.0)
 
-# 状态优先级: 越高越优先打断
 func _state_priority(s: PetState) -> int:
 	match s:
-		PetState.LOW_BATTERY, PetState.STORM_SCARED: return 5  # 紧急
-		PetState.RAIN_UMBRELLA, PetState.SNOW_CATCH, PetState.SNOW_FIGHT: return 4  # 天气
+		PetState.LOW_BATTERY, PetState.STORM_SCARED: return 5
+		PetState.RAIN_UMBRELLA, PetState.SNOW_CATCH, PetState.SNOW_FIGHT: return 4
 		PetState.RAIN_PUDDLE_JUMP, PetState.COLD_SHIVER, PetState.HOT_MELT: return 4
 		PetState.WIND_LEAN, PetState.FOG_WANDER: return 4
-		PetState.PHONE_SCROLL, PetState.FESTIVAL: return 3  # 状态
-		PetState.SLEEP_DEEP, PetState.SLEEP_RESTLESS, PetState.WAKE_UP: return 2  # 日程
+		PetState.SANDSTORM_HUDDLE: return 4
+		PetState.OVERCAST_IDLE: return 3
+		PetState.PHONE_SCROLL, PetState.FESTIVAL: return 3
+		PetState.SLEEP_DEEP, PetState.SLEEP_RESTLESS, PetState.WAKE_UP: return 2
 		PetState.WALKING, PetState.EAT, PetState.MORNING_WASH, PetState.IDLE: return 1
 		_: return 1
 
@@ -180,23 +183,59 @@ func enter_state(state: PetState):
 	state_time = 0.0
 	state_timer = 0.0
 
-	# 3D 动画驱动: FSM 状态 → glb 动画
-	# 模型动画: idle/walk/run/wave/up/fall/tilt_l/tilt_r
 	if pet and pet.has_method("play_anim"):
 		match state:
-			# 散步类 → walk
-			PetState.WALKING, PetState.FOG_WANDER:
+			PetState.WALKING:
 				pet.play_anim("walk")
 				pet.face_front()
-			# 互动/庆祝 → wave (挥手)
-			PetState.WAVE, PetState.JUMP, PetState.SPIN, PetState.FESTIVAL, PetState.SMS_REACT:
+			PetState.FOG_WANDER:
+				pet.play_anim("walk")
+				pet.face_front()
+			PetState.WAVE:
 				pet.play_anim("wave")
 				pet.face_front()
-			# 倒下/趴下/害怕/冷/低电量 → fall (蜷缩)
-			PetState.PLAY_DEAD, PetState.FALL_DOWN, PetState.STORM_SCARED, PetState.COLD_SHIVER, PetState.LOW_BATTERY:
+			PetState.SMS_REACT:
+				pet.play_anim("wave")
+				pet.face_front()
+			PetState.FESTIVAL:
+				pet.play_anim("wave")
+				pet.face_front()
+			PetState.SNOW_FIGHT:
+				pet.play_anim("wave")
+				pet.face_front()
+			PetState.MORNING_WASH:
+				pet.play_anim("wave")
+				pet.face_front()
+			PetState.JUMP:
+				pet.play_anim("up")
+				pet.face_front()
+			PetState.WAKE_UP:
+				pet.play_anim("up")
+				pet.face_front()
+			PetState.SPIN:
+				pet.play_anim("wave")
+				pet.face_front()
+			PetState.PLAY_DEAD:
 				pet.play_anim("fall")
 				pet.face_front()
-			# 风吹 → tilt
+			PetState.FALL_DOWN:
+				pet.play_anim("fall")
+				pet.face_front()
+			PetState.STORM_SCARED:
+				pet.play_anim("fall")
+				pet.face_front()
+			PetState.LOW_BATTERY:
+				pet.play_anim("fall")
+				pet.face_front()
+			PetState.COLD_SHIVER:
+				pet.play_anim("fall")
+				pet.face_front()
+			PetState.HOT_MELT:
+				pet.play_anim("fall")
+				pet.face_front()
+			PetState.SANDSTORM_HUDDLE:
+				pet.play_anim("fall")
+				pet.face_front()
 			PetState.WIND_LEAN:
 				pet.play_anim("tilt_l")
 				pet.face_front()
@@ -204,17 +243,27 @@ func enter_state(state: PetState):
 				pet.play_anim("tilt_l")
 			PetState.TILT_RIGHT:
 				pet.play_anim("tilt_r")
-			# 其余 (睡觉/吃饭/刷手机/撑伞/接雪/热化/起床等) → idle (站姿)
+			PetState.RAIN_UMBRELLA:
+				pet.play_anim("tilt_l")
+				pet.face_front()
+			PetState.SLEEP_DEEP:
+				pet.play_anim("idle")
+				if randi() % 2 == 0:
+					pet.face_left()
+				else:
+					pet.face_right()
+			PetState.SLEEP_RESTLESS:
+				pet.play_anim("idle")
+				if randi() % 2 == 0:
+					pet.face_left()
+				else:
+					pet.face_right()
+			PetState.GET_UP:
+				pet.play_anim("idle")
+				pet.face_front()
 			_:
 				pet.play_anim("idle")
-				# 睡觉时随机面向一侧, 增加自然感
-				if state in [PetState.SLEEP_DEEP, PetState.SLEEP_RESTLESS]:
-					if randi() % 2 == 0:
-						pet.face_left()
-					else:
-						pet.face_right()
-				else:
-					pet.face_front()
+				pet.face_front()
 
 	state_changed.emit(state, prev_state)
 
@@ -225,25 +274,91 @@ func _update_state(delta: float):
 	pet.position = base_pos
 	match current_state:
 		PetState.IDLE:
-			pass
+			var breathe = sin(state_time * 2.0) * 1.5
+			pet.position.y = base_pos.y + breathe
 		PetState.WALKING:
-			# 行走轻微上下浮动
 			var bounce = sin(state_time * 8.0) * 3.0
 			pet.position.y = base_pos.y + bounce
+		PetState.FOG_WANDER:
+			var drift_x = sin(state_time * 1.2) * 6.0
+			var drift_y = cos(state_time * 0.8) * 2.0
+			pet.position.x = base_pos.x + drift_x
+			pet.position.y = base_pos.y + drift_y
 		PetState.SLEEP_DEEP:
-			pet.position.y = base_pos.y + sin(state_time * 2.0) * 1.5
+			var breathe2 = sin(state_time * 1.5) * 2.0
+			pet.position.y = base_pos.y + breathe2
 		PetState.SLEEP_RESTLESS:
-			var shake = sin(state_time * 12.0) * 2.0
-			pet.position.x = base_pos.x + shake
+			var toss = sin(state_time * 12.0) * 2.5
+			pet.position.x = base_pos.x + toss
+		PetState.WAKE_UP:
+			var stretch = sin(state_time * 3.0) * 5.0
+			pet.position.y = base_pos.y - abs(stretch)
+		PetState.EAT:
+			var nom = sin(state_time * 10.0) * 2.0
+			pet.position.y = base_pos.y - abs(nom)
+		PetState.DRINK_HOT:
+			var sip = sin(state_time * 4.0) * 3.0
+			pet.position.y = base_pos.y - abs(sip)
+		PetState.MORNING_WASH:
+			var scrub = sin(state_time * 14.0) * 1.5
+			pet.position.x = base_pos.x + scrub
+		PetState.PHONE_SCROLL:
+			pet.position.y = base_pos.y + 2.0
+		PetState.SMS_REACT:
+			var alert_bounce = abs(sin(state_time * 6.0)) * 6.0
+			pet.position.y = base_pos.y - alert_bounce
+		PetState.LOW_BATTERY:
+			var drain = sin(state_time * 6.0) * 1.5
+			pet.position.y = base_pos.y + 3.0 + drain
+		PetState.RAIN_UMBRELLA:
+			var sway = sin(state_time * 2.5) * 3.0
+			pet.position.x = base_pos.x + sway
+		PetState.RAIN_PUDDLE_JUMP:
+			var jump = abs(sin(state_time * 5.0)) * 10.0
+			pet.position.y = base_pos.y - jump
 		PetState.STORM_SCARED:
-			var shake2 = sin(state_time * 20.0) * 4.0
-			pet.position.x = base_pos.x + shake2
+			var tremble = sin(state_time * 22.0) * 4.0
+			pet.position.x = base_pos.x + tremble
+		PetState.SNOW_CATCH:
+			var reach = sin(state_time * 3.0) * 4.0
+			pet.position.y = base_pos.y - abs(reach)
+		PetState.SNOW_FIGHT:
+			var lunge = sin(state_time * 6.0) * 5.0
+			pet.position.x = base_pos.x + lunge
 		PetState.COLD_SHIVER:
-			var shake3 = sin(state_time * 15.0) * 2.0
-			pet.position.x = base_pos.x + shake3
+			var shiver = sin(state_time * 18.0) * 2.0
+			pet.position.x = base_pos.x + shiver
+			pet.position.y = base_pos.y + 1.0
+		PetState.HOT_MELT:
+			var melt = minf(state_time * 2.0, 8.0)
+			pet.position.y = base_pos.y + melt
+		PetState.WIND_LEAN:
+			pet.position.x = base_pos.x - 6.0
 		PetState.FESTIVAL:
-			var bounce2 = abs(sin(state_time * 4.0)) * 8.0
-			pet.position.y = base_pos.y - bounce2
+			var party = abs(sin(state_time * 5.0)) * 10.0
+			pet.position.y = base_pos.y - party
+		PetState.WAVE:
+			pass
+		PetState.JUMP:
+			var jump2 = abs(sin(state_time * 4.0)) * 12.0
+			pet.position.y = base_pos.y - jump2
+		PetState.SPIN:
+			pet.position.y = base_pos.y - abs(sin(state_time * 4.0)) * 5.0
+		PetState.PLAY_DEAD:
+			pet.position.y = base_pos.y + 4.0
+		PetState.FALL_DOWN:
+			var impact = maxf(0.0, 3.0 - state_time * 6.0)
+			pet.position.y = base_pos.y + impact
+		PetState.GET_UP:
+			var rise = maxf(0.0, 4.0 - state_time * 4.0)
+			pet.position.y = base_pos.y + rise
+		PetState.OVERCAST_IDLE:
+			var mope = sin(state_time * 1.5) * 1.0
+			pet.position.y = base_pos.y + mope
+		PetState.SANDSTORM_HUDDLE:
+			var buffeted = sin(state_time * 8.0) * 3.0
+			pet.position.x = base_pos.x + buffeted
+			pet.position.y = base_pos.y + 2.0
 
 func on_touch(type: String):
 	match type:
@@ -254,7 +369,6 @@ func on_touch(type: String):
 		"double":
 			try_transition(PetState.SPIN, 0)
 
-# 中文状态文案 (供 HUD 显示)
 func state_label() -> String:
 	match current_state:
 		PetState.IDLE: return "😌 发呆中"
@@ -286,9 +400,10 @@ func state_label() -> String:
 		PetState.FESTIVAL: return "🎉 过节啦!"
 		PetState.TILT_LEFT: return "↩️ 左倾"
 		PetState.TILT_RIGHT: return "↪️ 右倾"
+		PetState.OVERCAST_IDLE: return "☁️ 阴沉沉"
+		PetState.SANDSTORM_HUDDLE: return "🏜️ 躲沙尘"
 		_: return "😊 陪伴你"
 
-# 状态是否为交互触发的临时动作 (持续时间短)
 func _is_transient(state: PetState) -> bool:
 	return state in [PetState.WAVE, PetState.JUMP, PetState.SPIN, PetState.PLAY_DEAD,
 		PetState.FALL_DOWN, PetState.GET_UP, PetState.WAKE_UP]

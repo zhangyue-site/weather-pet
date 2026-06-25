@@ -225,7 +225,7 @@ func _draw_horizon_glow(viewport_size: Vector2):
 		for i in range(5):
 			var r := 200.0 + i * 60.0
 			var a := glow_col.a * (1.0 - float(i) / 5.0)
-			draw_ellipse(Vector2(viewport_size.x * 0.5, horizon_y), Vector2(r, r * 0.3), Color(glow_col.r, glow_col.g, glow_col.b, a))
+			_draw_ellipse_shape(Vector2(viewport_size.x * 0.5, horizon_y), Vector2(r, r * 0.3), Color(glow_col.r, glow_col.g, glow_col.b, a))
 	elif is_night:
 		var moon_x := viewport_size.x * 0.75
 		var moon_y := viewport_size.y * 0.12
@@ -687,7 +687,7 @@ func draw_round_rect(rect: Rect2, color: Color, radius: float):
 	draw_circle(Vector2(rect.position.x + radius, rect.end.y - radius), radius, color)
 	draw_circle(rect.end - Vector2(radius, radius), radius, color)
 
-func draw_ellipse(center: Vector2, radii: Vector2, color: Color):
+func _draw_ellipse_shape(center: Vector2, radii: Vector2, color: Color):
 	var points := PackedVector2Array()
 	var steps := 32
 	for s_i in range(steps):
