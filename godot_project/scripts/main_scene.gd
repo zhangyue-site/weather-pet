@@ -300,10 +300,10 @@ func _draw_hud(viewport_size: Vector2):
 	# 时间 (超大, 苹果 SF 风格)
 	var time_size := 56 * s
 	draw_string(_cjk_font, Vector2(cx, top_y + time_size * 0.75), time_str,
-		HORIZONTAL_ALIGNMENT_CENTER, vp_w, time_size, Color(1, 1, 1, 0.95))
+		HORIZONTAL_ALIGNMENT_CENTER, 0, time_size, Color(1, 1, 1, 0.95))
 	if _hud_flash > 0.0:
 		draw_string(_cjk_font, Vector2(cx, top_y + time_size * 0.75), time_str,
-			HORIZONTAL_ALIGNMENT_CENTER, vp_w, time_size,
+			HORIZONTAL_ALIGNMENT_CENTER, 0, time_size,
 			Color(1.0, 0.95, 0.5, _hud_flash * 0.6))
 
 	# 城市 + 时段 (小字, 可点击切换)
@@ -312,13 +312,13 @@ func _draw_hud(viewport_size: Vector2):
 	var city_size := 17 * s
 	var city_y := top_y + time_size + 8 * s
 	draw_string(_cjk_font, Vector2(cx, city_y + city_size * 0.75), city_text,
-		HORIZONTAL_ALIGNMENT_CENTER, vp_w, city_size, Color(1, 1, 1, 0.65))
+		HORIZONTAL_ALIGNMENT_CENTER, 0, city_size, Color(1, 1, 1, 0.65))
 	# 记录城市点击区 (整行宽, 易点)
 	_city_card_rect = Rect2(vp_w * 0.2, city_y - city_size * 0.3,
 		vp_w * 0.6, city_size * 1.3)
 	# 切换提示小箭头 (悬于城市右侧, 演示模式闪烁)
 	var arrow_a := (0.4 + sin(_time * 2.5) * 0.2) if _demo_enabled else 0.3
-	var city_w := _cjk_font.get_string_size(city_text, HORIZONTAL_ALIGNMENT_CENTER, vp_w, city_size).x
+	var city_w := _cjk_font.get_string_size(city_text, HORIZONTAL_ALIGNMENT_CENTER, 0, city_size).x
 	draw_string(_cjk_font, Vector2(cx + city_w * 0.5 + 8 * s, city_y + city_size * 0.75), "⇄",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, city_size, Color(1.0, 0.85, 0.3, arrow_a))
 
@@ -327,17 +327,17 @@ func _draw_hud(viewport_size: Vector2):
 	var weather_y := vp_h * 0.28
 	var temp_size := 96 * s
 	draw_string(_cjk_font, Vector2(cx, weather_y + temp_size * 0.7),
-		"%.0f°" % temp, HORIZONTAL_ALIGNMENT_CENTER, vp_w, temp_size,
+		"%.0f°" % temp, HORIZONTAL_ALIGNMENT_CENTER, 0, temp_size,
 		Color(1, 1, 1, 0.92))
 	# 天气描述 (图标 + 文字)
 	var cond_text := cond_icon + " " + cond_label
 	var cond_size := 20 * s
 	draw_string(_cjk_font, Vector2(cx, weather_y + temp_size + cond_size),
-		cond_text, HORIZONTAL_ALIGNMENT_CENTER, vp_w, cond_size, Color(1, 1, 1, 0.75))
+		cond_text, HORIZONTAL_ALIGNMENT_CENTER, 0, cond_size, Color(1, 1, 1, 0.75))
 	# 体感温度 + 湿度 (小字)
 	var detail := "体感 %.0f°  ·  湿度 %.0f%%" % [feels, hum]
 	draw_string(_cjk_font, Vector2(cx, weather_y + temp_size + cond_size + 22 * s),
-		detail, HORIZONTAL_ALIGNMENT_CENTER, vp_w, 14 * s, Color(1, 1, 1, 0.5))
+		detail, HORIZONTAL_ALIGNMENT_CENTER, 0, 14 * s, Color(1, 1, 1, 0.5))
 
 	# ==================== 底部: 毛玻璃状态胶囊 (苹果 Control Center 风) ====================
 	var pill_h := 52.0 * s
@@ -721,7 +721,7 @@ func _draw_settings_panel(viewport_size: Vector2):
 
 	# 标题
 	draw_string(_cjk_font, Vector2(cx, cur_y + 24 * s), "⚙ 设置",
-		HORIZONTAL_ALIGNMENT_CENTER, pw, 22 * s, Color.WHITE)
+		HORIZONTAL_ALIGNMENT_CENTER, 0, 22 * s, Color.WHITE)
 	cur_y += 40 * s
 
 	# Tab 栏 (城市 | 小人 | 关于)
@@ -734,7 +734,7 @@ func _draw_settings_panel(viewport_size: Vector2):
 		var tab_col := Color(0.2, 0.6, 1.0, 0.3) if active else Color(1, 1, 1, 0.08)
 		draw_rect(Rect2(tx + 4 * s, cur_y, tab_w - 8 * s, 32 * s), tab_col, true)
 		draw_string(_cjk_font, Vector2(tx + tab_w * 0.5, cur_y + 22 * s), tab_name,
-			HORIZONTAL_ALIGNMENT_CENTER, tab_w, 14 * s,
+			HORIZONTAL_ALIGNMENT_CENTER, 0, 14 * s,
 			Color.WHITE if active else Color(1, 1, 1, 0.6))
 	cur_y += 44 * s
 
@@ -754,7 +754,7 @@ func _draw_settings_panel(viewport_size: Vector2):
 	var close_rect := Rect2(cx - 60 * s, close_y, 120 * s, 36 * s)
 	draw_round_rect(close_rect, Color(0.9, 0.3, 0.3, 0.7), 18 * s)
 	draw_string(_cjk_font, Vector2(close_rect.position.x + 60 * s, close_rect.position.y + 24 * s),
-		"关闭", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 16 * s, Color.WHITE)
+		"关闭", HORIZONTAL_ALIGNMENT_CENTER, 0, 16 * s, Color.WHITE)
 
 # Tab 0: 城市切换
 func _draw_settings_city(px: float, y: float, pw: float, s: float) -> float:
@@ -777,14 +777,14 @@ func _draw_settings_city(px: float, y: float, pw: float, s: float) -> float:
 			var col2 := Color(0.2, 0.6, 1.0, 0.35) if active else Color(1, 1, 1, 0.08)
 			draw_round_rect(Rect2(bx + 2 * s, byy, btn_w - 4 * s, btn_h), col2, 10 * s)
 			draw_string(_cjk_font, Vector2(bx + btn_w * 0.5, byy + 24 * s), names[i],
-				HORIZONTAL_ALIGNMENT_CENTER, btn_w, 15 * s, Color.WHITE)
+				HORIZONTAL_ALIGNMENT_CENTER, 0, 15 * s, Color.WHITE)
 		cur += (names.size() / cols + 1) * (btn_h + 6 * s)
 	# GPS 按钮
 	cur += 10 * s
 	var gps_rect := Rect2(px + 24 * s, cur, pw - 48 * s, 40 * s)
 	draw_round_rect(gps_rect, Color(0.3, 0.7, 0.4, 0.5), 12 * s)
 	draw_string(_cjk_font, Vector2(px + pw * 0.5, cur + 26 * s), "🛰 使用 GPS 实时定位",
-		HORIZONTAL_ALIGNMENT_CENTER, pw, 16 * s, Color.WHITE)
+		HORIZONTAL_ALIGNMENT_CENTER, 0, 16 * s, Color.WHITE)
 	return cur + 50 * s
 
 # Tab 1: 小人朝向调整
@@ -806,7 +806,7 @@ func _draw_settings_pet(px: float, y: float, pw: float, s: float) -> float:
 		draw_round_rect(Rect2(bx + 2 * s, cur, btn_w - 4 * s, 50 * s),
 			Color(1, 1, 1, 0.1), 10 * s)
 		draw_string(_cjk_font, Vector2(bx + btn_w * 0.5, cur + 22 * s), dirs[i]["label"],
-			HORIZONTAL_ALIGNMENT_CENTER, btn_w, 12 * s, Color(0.9, 0.95, 1.0))
+			HORIZONTAL_ALIGNMENT_CENTER, 0, 12 * s, Color(0.9, 0.95, 1.0))
 	cur += 62 * s
 	# 动画预览按钮
 	draw_string(_cjk_font, Vector2(px + 24 * s, cur + 20 * s), "动画演示",
@@ -818,7 +818,7 @@ func _draw_settings_pet(px: float, y: float, pw: float, s: float) -> float:
 		var btn_rect := Rect2(bx + 2 * s, cur, (pw - 48 * s) / 4.0 - 4 * s, 36 * s)
 		draw_round_rect(btn_rect, Color(1, 1, 1, 0.1), 10 * s)
 		draw_string(_cjk_font, Vector2(bx + btn_rect.size.x * 0.5 + 2 * s, cur + 23 * s), anims[i],
-			HORIZONTAL_ALIGNMENT_CENTER, btn_rect.size.x, 13 * s, Color(0.9, 0.95, 1.0))
+			HORIZONTAL_ALIGNMENT_CENTER, 0, 13 * s, Color(0.9, 0.95, 1.0))
 	cur += 46 * s
 	return cur
 
