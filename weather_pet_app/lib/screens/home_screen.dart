@@ -3,10 +3,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:rive/rive.dart';
 import '../models/weather.dart';
 import '../services/weather_service.dart';
 import '../services/location_service.dart';
+import '../services/phone_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,26 +23,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _isFastDemo = false;
   bool _isLoading = true;
 
-  String _catAnim = 'assets/animations/cat3.json';
+  // 动画资源
+  String _catLottieAnim = 'assets/animations/cat3.json';
   String _weatherAnim = 'assets/animations/weather_clear.json';
   bool _showWeatherOverlay = false;
+  bool _useRive = true; // 优先使用 Rive
 
+  // Rive
+  RiveAnimationController? _riveController;
+  Artboard? _riveArtboard;
+  String _riveAnimName = 'idle';
+
+  // 时间
   int _demoHour = 8;
   int _demoMinute = 0;
   String _demoPeriod = '上午';
 
   // 手机状态
-  String _connectionType = 'wifi'; // wifi / data / none
+  final PhoneService _phoneService = PhoneService();
+  String _connectionType = 'wifi';
   bool _isPhoneRinging = false;
   bool _hasNewSms = false;
   int _batteryPercent = 85;
   bool _isCharging = false;
+  double _batteryTemp = 25.0;
+  bool _isWalking = false;
 
   late AnimationController _timeCtrl;
   late AnimationController _bounceCtrl;
   Timer? _stateTimer;
   Timer? _fastDemoTimer;
-  Timer? _phoneTimer;
   double _animTime = 0;
   int _demoIndex = 0;
 
@@ -87,14 +98,50 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _timeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
     _timeCtrl.addListener(() => setState(() => _animTime += 0.016));
     _bounceCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _loadRiveAnimation();
     _initApp();
+  }
+
+  void _loadRiveAnimation() {
+    try {
+      final file = RiveFile.asset('assets/rive/cat2.riv');
+      _riveArtboard = file.mainArtboard;
+      _riveController = SimpleAnimation('idle', autoplay: true);
+      _riveArtboard!.addController(_riveController!);
+    } catch (e) {
+      _useRive = false;
+    }
+  }
+
+  void _switchRiveAnimation(String animName) {
+    if (_riveArtboard == null || _riveController == null) return;
+    if (animName == _riveAnimName) return;
+    _riveAnimName = animName;
+    _riveController!.dispose();
+    _riveController = SimpleAnimation(animName, autoplay: true);
+    _riveArtboard!.addController(_riveController!);
   }
 
   Future<void> _initApp() async {
     await _loadWeather();
     _startTimers();
-    _startPhoneMonitoring();
+    _phoneService.startMonitoring(demoMode: _isDemoMode);
+    _startPhoneStateSync();
     setState(() => _isLoading = false);
+  }
+
+  void _startPhoneStateSync() {
+    Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted) {
+        setState(() {
+          _batteryPercent = _phoneService.batteryLevel;
+          _isCharging = _phoneService.isCharging;
+          _connectionType = _phoneService.connectionType;
+          _batteryTemp = _phoneService.batteryTemperature;
+          _isWalking = _phoneService.isWalking;
+        });
+      }
+    });
   }
 
   Future<void> _loadWeather() async {
@@ -143,6 +190,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _startDemoMode() {
     setState(() { _isDemoMode = true; _isFastDemo = false; _demoIndex = 0; });
+    _phoneService.startMonitoring(demoMode: true);
     _applyDemoScene();
     _stateTimer?.cancel();
     _stateTimer = Timer.periodic(const Duration(seconds: 6), (_) {
@@ -211,8 +259,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (scene['label'].toString().contains('电话')) { _isPhoneRinging = true; }
     else if (scene['label'].toString().contains('短信')) { _hasNewSms = true; }
     else if (scene['label'].toString().contains('信号')) { _connectionType = 'none'; }
-    else if (scene['label'].toString().contains('充电')) { _isCharging = true; }
-    else { _isPhoneRinging = false; _hasNewSms = false; _isCharging = false; _connectionType = 'wifi'; }
+    else if (scene['label'].toString().contains('充电')) {
+      _isCharging = true;
+      _batteryTemp = 38.0;
+    }
+    else { _isPhoneRinging = false; _hasNewSms = false; _isCharging = false; _connectionType = 'wifi'; _batteryTemp = 25.0; }
 
     setState(() {
       _weather = WeatherData(condition: condition, temperature: temp, humidity: 50, windSpeed: 5, cityName: '北京');
@@ -253,8 +304,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final w = _weather;
     PetState newState;
 
+    // 优先级: 手机事件 > 天气 > 温度 > 时间
     if (_isPhoneRinging) { newState = PetState.jumping; }
     else if (_hasNewSms) { newState = PetState.waving; }
+    else if (_batteryTemp > 45) { newState = PetState.hotMelt; }  // 严重过热
+    else if (_batteryTemp > 40) { newState = PetState.coldShiver; }  // 过热发抖
     else if (w.isStormy) { newState = PetState.stormScared; }
     else if (w.isRaining) { newState = PetState.rainUmbrella; }
     else if (w.isSnowing) { newState = Random().nextBool() ? PetState.snowCatch : PetState.snowFight; }
@@ -262,6 +316,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     else if (w.isWindy) { newState = PetState.windLean; }
     else if (w.isHot) { newState = PetState.hotMelt; }
     else if (w.isCold) { newState = PetState.coldShiver; }
+    else if (_isWalking) { newState = PetState.walking; }  // 走路检测
     else if (hour < 6) { newState = PetState.sleeping; }
     else if (hour < 8) { newState = PetState.eating; }
     else if (hour < 12) { newState = PetState.walking; }
@@ -270,7 +325,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     else if (hour < 20) { newState = PetState.idle; }
     else { newState = PetState.sleeping; }
 
+    // 更新 Rive 动画
+    _switchRiveAnimation(_mapStateToRive(newState));
+
     setState(() { _petState = newState; });
+  }
+
+  String _mapStateToRive(PetState state) {
+    const map = {
+      PetState.idle: 'idle',
+      PetState.walking: 'walk',
+      PetState.sleeping: 'sleep',
+      PetState.eating: 'eat',
+      PetState.waving: 'wave',
+      PetState.jumping: 'jump',
+      PetState.fogWander: 'walk',
+      PetState.festival: 'wave',
+    };
+    return map[state] ?? 'idle';
   }
 
   void _onPetTap() {
@@ -295,7 +367,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _bounceCtrl.dispose();
     _stateTimer?.cancel();
     _fastDemoTimer?.cancel();
-    _phoneTimer?.cancel();
+    _phoneService.stopMonitoring();
+    _riveController?.dispose();
     super.dispose();
   }
 
@@ -400,8 +473,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 }
                 return Transform.translate(
                   offset: Offset(offsetX, offsetY),
-                  child: SizedBox(width: 200, height: 200,
-                    child: Lottie.asset(_catAnim, fit: BoxFit.contain, repeat: true, animate: true)),
+                  child: SizedBox(
+                    width: 200, height: 200,
+                    child: _useRive && _riveArtboard != null
+                        ? RiveAnimation.artboard(_riveArtboard!, fit: BoxFit.contain)
+                        : Lottie.asset(_catLottieAnim, fit: BoxFit.contain, repeat: true, animate: true),
+                  ),
                 );
               },
             ),
@@ -494,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height: 8),
         // 底部状态栏
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.12),
             borderRadius: BorderRadius.circular(24),
@@ -509,7 +586,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               _connectionType != 'none' ? Colors.white : const Color(0xFFFF6B6B),
             ),
             _buildDivider(),
-            Text(_petState.label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+            // 温度指示
+            _buildStatusItem(
+              _batteryTemp > 40 ? Icons.thermostat : Icons.thermostat_outlined,
+              '${_batteryTemp.toStringAsFixed(0)}°',
+              _batteryTemp > 40 ? const Color(0xFFFF6B6B) : Colors.white,
+            ),
+            _buildDivider(),
+            Text(_petState.label, style: const TextStyle(color: Colors.white, fontSize: 12)),
           ]),
         ),
       ]),
@@ -517,8 +601,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildPhoneStatus() {
+    // 过热警告
+    if (_batteryTemp > 40) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: _batteryTemp > 45 ? Colors.red.withOpacity(0.8) : Colors.orange.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(_batteryTemp > 45 ? Icons.warning : Icons.thermostat,
+            color: Colors.white, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            _batteryTemp > 45 ? '🔥 手机过热！${_batteryTemp.toStringAsFixed(0)}°' : '🌡 温度偏高 ${_batteryTemp.toStringAsFixed(0)}°',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+        ]),
+      );
+    }
     if (_isPhoneRinging) {
       return Container(
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(color: Colors.amber.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -530,6 +635,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
     if (_hasNewSms) {
       return Container(
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(color: Colors.lightBlue.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -541,6 +647,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
     if (_isCharging) {
       return Container(
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(color: Colors.green.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -552,6 +659,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
     if (_connectionType == 'none') {
       return Container(
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(color: Colors.orange.withOpacity(0.8), borderRadius: BorderRadius.circular(12)),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
