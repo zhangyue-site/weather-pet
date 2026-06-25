@@ -120,13 +120,10 @@ func _customize_appearance(root: Node3D):
 	_add_weather_badge(root)
 
 func _apply_multicolor_materials(node: Node):
-	# 多彩方案: 遍历 MeshInstance3D, 给每个 surface 上不同颜色
-	# primitive[0] = 主体(头+身) → 暖白/奶黄
-	# primitive[1,2] = 手臂 → 暖橙
-	# 用 OverrideMaterial 覆盖, 不依赖原贴图 (颜色更纯净多彩)
-	var body_color := Color(1.0, 0.96, 0.88)   # 奶白色 (头身)
-	var arm_color := Color(0.95, 0.65, 0.45)   # 暖橙色 (手臂)
-	var colors := [body_color, arm_color, arm_color]
+	var body_color := Color(1.0, 0.85, 0.55)   # 明亮暖黄 (头身)
+	var arm_color := Color(0.95, 0.55, 0.30)    # 暖橙 (手臂)
+	var cheek_color := Color(0.95, 0.70, 0.50)  # 浅桃 (耳朵/细节)
+	var colors := [body_color, arm_color, cheek_color]
 	_color_meshes(node, colors, 0)
 
 func _color_meshes(node: Node, colors: Array, idx: int) -> int:
@@ -140,8 +137,8 @@ func _color_meshes(node: Node, colors: Array, idx: int) -> int:
 				var mat := StandardMaterial3D.new()
 				mat.albedo_color = color
 				mat.roughness = 0.6
-				mat.specular = 0.5
-				mat.metallic = 0.0
+				mat.metallic = 0.1
+				mat.metallic_specular = 0.5
 				mi.set_surface_override_material(i, mat)
 				cur += 1
 		cur = _color_meshes(child, colors, cur)

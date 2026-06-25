@@ -54,14 +54,13 @@ var pet_fsm_node: Node = null
 
 func _ready():
 	_init_font()
-	_scale_factor = maxf(0.5, DisplayServer.screen_get_size().y / 920.0)
+	_scale_factor = maxf(0.5, get_viewport_rect().size.y / 920.0)
 	_instantiate_subsystems()
 	_layout_scene()
 	set_process_input(true)
 	if data:
 		if data.has_signal("data_pushed"):
 			data.data_pushed.connect(_on_data_pushed)
-		# 检测是否在演示模式 (无插件)
 		if "plugin_ref" in data and data.plugin_ref == null:
 			_demo_enabled = true
 	queue_redraw()
@@ -251,7 +250,7 @@ func _update_background():
 		_bottom_bg_color = Color(0.65, 0.78, 0.9)
 
 func _update_scale():
-	var new_s = maxf(0.5, DisplayServer.screen_get_size().y / 920.0)
+	var new_s = maxf(0.5, get_viewport_rect().size.y / 920.0)
 	if absf(new_s - _scale_factor) > 0.01:
 		_scale_factor = new_s
 		_stars_seeded = false
