@@ -58,7 +58,7 @@ func _draw_umbrella():
 		Color(0.4, 0.72, 0.98, al)
 	]
 	# Shadow under umbrella
-	draw_ellipse(Vector2(-50, -8), Vector2(42, 8), Color(0, 0, 0, 0.1 * al))
+	_draw_ellipse_shape(Vector2(-50, -8), Vector2(42, 8), Color(0, 0, 0, 0.1 * al))
 	# Canopy (semi-circle with gradient feel)
 	for i in range(3):
 		var radius := 42.0 - i * 3.0
@@ -296,7 +296,7 @@ func _draw_rounded_rect_border(rect: Rect2, color: Color, radius: float, width: 
 	draw_line(Vector2(rect.position.x, rect.position.y + radius), Vector2(rect.position.x, rect.end.y - radius), color, width)
 	draw_line(Vector2(rect.end.x, rect.position.y + radius), Vector2(rect.end.x, rect.end.y - radius), color, width)
 
-func draw_ellipse(center: Vector2, radii: Vector2, color: Color):
+func _draw_ellipse_shape(center: Vector2, radii: Vector2, color: Color):
 	var points := PackedVector2Array()
 	var steps := 24
 	for i in range(steps):
