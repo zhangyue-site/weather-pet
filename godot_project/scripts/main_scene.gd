@@ -292,52 +292,45 @@ func _draw_hud(viewport_size: Vector2):
 	var chg: bool = data.is_charging if "is_charging" in data else false
 	var sig: int = data.phone_signal if "phone_signal" in data else 4
 
-	# ==================== 顶部: 时间 + 城市 (简约居中) ====================
-	# 苹果风格: 大号时间居中, 城市在下方小字
-	var cx := vp_w * 0.5
-	var top_y := 48.0 * s
+	# ==================== 顶部: 左=时间+城市  右=温度+天气 ====================
+	var top_y := 30.0 * s
+	var margin := 24.0 * s
 
-	# 时间 (超大, 苹果 SF 风格)
-	var time_size := 56 * s
-	draw_string(_cjk_font, Vector2(0, top_y + time_size * 0.75), time_str,
-		HORIZONTAL_ALIGNMENT_CENTER, vp_w, time_size, Color(1, 1, 1, 0.95))
+	# --- 左侧: 时间 + 城市 ---
+	var time_size := 48 * s
+	draw_string(_cjk_font, Vector2(margin, top_y + time_size * 0.8), time_str,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, time_size, Color(1, 1, 1, 0.95))
 	if _hud_flash > 0.0:
-		draw_string(_cjk_font, Vector2(0, top_y + time_size * 0.75), time_str,
-			HORIZONTAL_ALIGNMENT_CENTER, vp_w, time_size,
+		draw_string(_cjk_font, Vector2(margin, top_y + time_size * 0.8), time_str,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, time_size,
 			Color(1.0, 0.95, 0.5, _hud_flash * 0.6))
 
-	# 城市 + 时段 (小字, 可点击切换)
 	var loc_mode: String = data.location_mode if "location_mode" in data else "gps"
 	var city_text := city + " · " + period
-	var city_size := 17 * s
-	var city_y := top_y + time_size + 8 * s
-	draw_string(_cjk_font, Vector2(0, city_y + city_size * 0.75), city_text,
-		HORIZONTAL_ALIGNMENT_CENTER, vp_w, city_size, Color(1, 1, 1, 0.65))
-	# 记录城市点击区 (整行宽, 易点)
-	_city_card_rect = Rect2(vp_w * 0.2, city_y - city_size * 0.3,
-		vp_w * 0.6, city_size * 1.3)
-	# 切换提示小箭头 (悬于城市右侧, 演示模式闪烁)
-	var arrow_a := (0.4 + sin(_time * 2.5) * 0.2) if _demo_enabled else 0.3
-	var city_w := _cjk_font.get_string_size(city_text, HORIZONTAL_ALIGNMENT_CENTER, vp_w, city_size).x
-	draw_string(_cjk_font, Vector2(vp_w * 0.5 + city_w * 0.5 + 8 * s, city_y + city_size * 0.75), "⇄",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, city_size, Color(1.0, 0.85, 0.3, arrow_a))
+	var city_size := 14 * s
+	var city_y := top_y + time_size + 4 * s
+	draw_string(_cjk_font, Vector2(margin, city_y + city_size * 0.75), city_text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, city_size, Color(1, 1, 1, 0.6))
+	_city_card_rect = Rect2(margin - 8 * s, city_y - city_size * 0.3,
+		160 * s, city_size * 1.6)
 
-	# ==================== 中部偏上: 天气信息 (大温度居中) ====================
-	# 苹果天气 App 风格: 巨大温度数字 + 天气描述
-	var weather_y := vp_h * 0.28
-	var temp_size := 96 * s
-	draw_string(_cjk_font, Vector2(0, weather_y + temp_size * 0.7),
-		"%.0f°" % temp, HORIZONTAL_ALIGNMENT_CENTER, vp_w, temp_size,
-		Color(1, 1, 1, 0.92))
-	# 天气描述 (图标 + 文字)
+	# --- 右侧: 温度 + 天气描述 ---
+	var temp_str := "%.0f°" % temp
+	var temp_size := 52 * s
+	draw_string(_cjk_font, Vector2(vp_w - margin, top_y + temp_size * 0.8), temp_str,
+		HORIZONTAL_ALIGNMENT_RIGHT, -1, temp_size, Color(1, 1, 1, 0.95))
+
 	var cond_text := cond_icon + " " + cond_label
-	var cond_size := 20 * s
-	draw_string(_cjk_font, Vector2(0, weather_y + temp_size + cond_size),
-		cond_text, HORIZONTAL_ALIGNMENT_CENTER, vp_w, cond_size, Color(1, 1, 1, 0.75))
-	# 体感温度 + 湿度 (小字)
-	var detail := "体感 %.0f°  ·  湿度 %.0f%%" % [feels, hum]
-	draw_string(_cjk_font, Vector2(0, weather_y + temp_size + cond_size + 22 * s),
-		detail, HORIZONTAL_ALIGNMENT_CENTER, vp_w, 14 * s, Color(1, 1, 1, 0.5))
+	var cond_size := 14 * s
+	var cond_y := top_y + temp_size + 4 * s
+	draw_string(_cjk_font, Vector2(vp_w - margin, cond_y + cond_size * 0.75), cond_text,
+		HORIZONTAL_ALIGNMENT_RIGHT, -1, cond_size, Color(1, 1, 1, 0.6))
+
+	# --- 中间: 体感 + 湿度 (小字, 居中) ---
+	var detail := "体感%.0f° 湿度%.0f%%" % [feels, hum]
+	var detail_y := top_y + time_size + city_size + 10 * s
+	draw_string(_cjk_font, Vector2(0, detail_y + 10 * s), detail,
+		HORIZONTAL_ALIGNMENT_CENTER, vp_w, 11 * s, Color(1, 1, 1, 0.4))
 
 	# ==================== 底部: 毛玻璃状态胶囊 (苹果 Control Center 风) ====================
 	var pill_h := 52.0 * s
