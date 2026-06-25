@@ -29,7 +29,11 @@ DataChannel="*res://scripts/data_channel.gd"
 
 window/size/viewport_width=1080
 window/size/viewport_height=1920
-window/stretch/mode="viewport"
+window/size/window_width_override=540
+window/size/window_height_override=960
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
 window/handheld/orientation=1
 
 [gdextensions]
