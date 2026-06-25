@@ -54,9 +54,9 @@ var pet_fsm_node: Node = null
 
 func _ready():
 	_init_font()
-	_scale_factor = maxf(0.5, get_viewport_rect().size.y / 920.0)
+	_scale_factor = 2.09
 	_instantiate_subsystems()
-	_layout_scene()
+	_layout_scene_once()
 	set_process_input(true)
 	if data:
 		if data.has_signal("data_pushed"):
@@ -119,8 +119,6 @@ func _process(delta: float):
 		return
 	_time += delta
 	_update_background()
-	_update_scale()
-	_layout_scene()
 	_update_touch_anim(delta)
 	if _hud_flash > 0.0:
 		_hud_flash = maxf(0.0, _hud_flash - delta * 1.6)
@@ -249,33 +247,21 @@ func _update_background():
 		_mid_bg_color = Color(0.5, 0.65, 0.85)
 		_bottom_bg_color = Color(0.65, 0.78, 0.9)
 
-func _update_scale():
-	var new_s = maxf(0.5, get_viewport_rect().size.y / 920.0)
-	if absf(new_s - _scale_factor) > 0.01:
-		_scale_factor = new_s
-		_stars_seeded = false
-
-func _layout_scene():
-	var viewport_size := get_viewport_rect().size
-	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
-		return
-
+func _layout_scene_once():
+	# 画布固定 1080x1920, 所有位置写死, 不再每帧重算
 	if cityscape_node:
 		cityscape_node.position = Vector2.ZERO
-
 	if weather_fx_node:
-		weather_fx_node.position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.15)
-
+		weather_fx_node.position = Vector2(540, 288)
 	if pet_renderer_node:
-		var pet_base := Vector2(viewport_size.x * 0.5, viewport_size.y * 0.58)
+		var pet_base := Vector2(540, 1110)
 		if pet_renderer_node.has_method("set_base_position"):
 			pet_renderer_node.call("set_base_position", pet_base)
 		else:
 			pet_renderer_node.position = pet_base
-		pet_renderer_node.scale = Vector2.ONE * maxf(1.6, viewport_size.y / 900.0)
-
+		pet_renderer_node.scale = Vector2.ONE * 2.13
 	if prop_system_node:
-		prop_system_node.position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.58)
+		prop_system_node.position = Vector2(540, 1110)
 
 # ============================================================
 #  信息 HUD (苹果风格: 顶部居中天气 + 底部毛玻璃状态栏)
