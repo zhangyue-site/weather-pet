@@ -8,9 +8,9 @@ extends Node2D
 #  - 演示模式开关 + 城市手动切换
 # ============================================================
 
-const DW := 1080.0
-const DH := 1920.0
-const DS := 2.09
+const DW := 540.0
+const DH := 960.0
+const DS := 1.04
 
 var _time: float = 0.0
 
@@ -250,20 +250,19 @@ func _update_background():
 		_bottom_bg_color = Color(0.65, 0.78, 0.9)
 
 func _layout_scene_once():
-	# 画布固定 1080x1920, 所有位置写死, 不再每帧重算
 	if cityscape_node:
 		cityscape_node.position = Vector2.ZERO
 	if weather_fx_node:
-		weather_fx_node.position = Vector2(540, 288)
+		weather_fx_node.position = Vector2(270, 144)
 	if pet_renderer_node:
-		var pet_base := Vector2(540, 1110)
+		var pet_base := Vector2(270, 555)
 		if pet_renderer_node.has_method("set_base_position"):
 			pet_renderer_node.call("set_base_position", pet_base)
 		else:
 			pet_renderer_node.position = pet_base
-		pet_renderer_node.scale = Vector2.ONE * 2.13
+		pet_renderer_node.scale = Vector2.ONE * 1.07
 	if prop_system_node:
-		prop_system_node.position = Vector2(540, 1110)
+		prop_system_node.position = Vector2(270, 555)
 
 # ============================================================
 #  信息 HUD (苹果风格: 顶部居中天气 + 底部毛玻璃状态栏)
