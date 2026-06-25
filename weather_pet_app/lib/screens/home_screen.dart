@@ -161,6 +161,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       default: weatherAnim = 'assets/animations/weather_clear.json'; showOverlay = false;
     }
 
+    // 始终用同一个猫 (cat3.json)
+    final catFile = 'assets/animations/cat3.json';
+
     String period;
     if (hour < 6) period = '凌晨';
     else if (hour < 11) period = '上午';
@@ -177,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _demoHour = hour;
       _demoMinute = minute;
       _demoPeriod = period;
-      _catAnim = 'assets/animations/cat$catNum.json';
+      _catAnim = catFile;  // 始终同一个猫
       _weatherAnim = weatherAnim;
       _showWeatherOverlay = showOverlay;
       _petState = _stateFromName(stateName);
@@ -231,27 +234,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     setState(() {
       _petState = newState;
-      _catAnim = 'assets/animations/cat${(_catIndex % 7) + 1}.json';
-      _catIndex++;
+      _catAnim = 'assets/animations/cat3.json';  // 始终同一个猫
     });
   }
 
   void _onPetTap() {
     setState(() {
       _petState = Random().nextBool() ? PetState.waving : PetState.jumping;
-      _catAnim = 'assets/animations/cat${Random().nextInt(7) + 1}.json';
+      // 始终同一个猫
     });
     _bounceCtrl.forward(from: 0);
     Future.delayed(const Duration(seconds: 2), () { if (mounted && !_isDemoMode) _updatePetState(); });
   }
 
   void _onPetLongPress() {
-    setState(() { _petState = PetState.playDead; _catAnim = 'assets/animations/cat5.json'; });
+    setState(() { _petState = PetState.playDead; });
     Future.delayed(const Duration(seconds: 2), () { if (mounted && !_isDemoMode) _updatePetState(); });
   }
 
   void _onPetDoubleTap() {
-    setState(() { _petState = PetState.spinning; _catAnim = 'assets/animations/cat3.json'; });
+    setState(() { _petState = PetState.spinning; });
     Future.delayed(const Duration(seconds: 2), () { if (mounted && !_isDemoMode) _updatePetState(); });
   }
 
@@ -335,13 +337,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          // 天气 Lottie 特效
+          // 天气 Lottie 特效 (ClipRect 限制在屏幕内)
           if (_showWeatherOverlay)
             Positioned.fill(
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: 0.5,
-                  child: Lottie.asset(_weatherAnim, fit: BoxFit.cover, repeat: true, animate: true),
+              child: ClipRect(
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.5,
+                    child: Lottie.asset(
+                      _weatherAnim,
+                      fit: BoxFit.cover,
+                      repeat: true,
+                      animate: true,
+                      width: MediaQuery.of(context).size.width,
+                      height: MediaQuery.of(context).size.height,
+                    ),
+                  ),
                 ),
               ),
             ),
