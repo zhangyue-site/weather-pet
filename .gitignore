@@ -39,3 +39,10 @@ zuqiuxiaojiang/
 *~
 .vscode/
 .idea/
+build/
+.godot/
+android/build/
+.worktrees/
+.mimocode/
+Pods/
+.dart_tool/
