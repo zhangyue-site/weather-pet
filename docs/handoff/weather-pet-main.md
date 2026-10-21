@@ -59,9 +59,17 @@
 
 ## 接力入口与工作区
 
-- 当前分支：`codex/weather-companion-handoff`；上传状态：准备提交。
+- 当前分支：`codex/weather-companion-handoff`；上传状态：已上传并经 GitHub API 读回验证。主体代码提交 `3d4f36137a6c0182f76044c8cfde9f2a29055759`；本交接收尾文档会有后续提交。
 - 当前执行：Codex 本会话，2026-10-21；负责状态核对、交接文档、滴答同步和源码上传，没有新增业务功能或发布 APK。
 - 原有未提交差异：旧工程清理及 companion 新工程，本轮只归档既有成果；其他工具元数据、本地构建产物和独立服务器运维记录保留在本机。
 - 代码状态时间：2026-10-21T08:40:18+08:00；本轮六组测试已通过，无本轮业务代码改动。
-- 滴答同步：首次保存已 verified；整理版与 GitHub 交付状态待下一次同步。稳定任务键 `weather-pet-main`。
+- 滴答同步：进度与待办摘要已 verified；最终 GitHub 结果同步到同一任务，最新成功同步时间记录在本机私有绑定中。稳定任务键 `weather-pet-main`。
 - 后续继续开发默认先保存此文件，再按 dida-dev-handoff 技能同步同一任务。
+
+## 本轮交付结果
+
+- GitHub 私有仓库：[weather-pet / Godot 交付分支](https://github.com/xiaoletian64/weather-pet/tree/codex/weather-companion-handoff)。
+- 主体代码提交：[3d4f361](https://github.com/xiaoletian64/weather-pet/commit/3d4f36137a6c0182f76044c8cfde9f2a29055759)，GitHub 读回 SHA 与本地一致；默认分支保留原状态。
+- 已保存源码、内容目录、截图证据、测试、构建与发布脚本；APK、签名、邮箱/服务器凭据、构建缓存和本机工具元数据未上传。
+- 本轮 6 组测试通过；没有重新打包、部署、合并 Flutter 主线或宣称实体手机验收完成。
+- 工作区的既有 Godot 改动已提交；本机私有同步绑定、构建产物与独立运维记录被忽略并保留。
