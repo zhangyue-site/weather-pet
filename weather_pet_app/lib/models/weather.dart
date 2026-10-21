@@ -3,7 +3,7 @@ class WeatherData {
   final double temperature;
   final double humidity;
   final double windSpeed;
-  final String cityName;
+  String cityName;
   final double feelsLike;
 
   WeatherData({
@@ -11,7 +11,7 @@ class WeatherData {
     this.temperature = 22.0,
     this.humidity = 50.0,
     this.windSpeed = 5.0,
-    this.cityName = '北京',
+    this.cityName = '定位中…',
     this.feelsLike = 22.0,
   });
 
@@ -21,7 +21,7 @@ class WeatherData {
       temperature: (json['temperature'] ?? 22.0).toDouble(),
       humidity: (json['humidity'] ?? 50.0).toDouble(),
       windSpeed: (json['wind_speed'] ?? 5.0).toDouble(),
-      cityName: json['city_name'] ?? '北京',
+      cityName: json['city_name'] ?? '未知',
       feelsLike: (json['feels_like'] ?? json['temperature'] ?? 22.0).toDouble(),
     );
   }

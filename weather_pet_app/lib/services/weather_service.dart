@@ -7,6 +7,39 @@ class WeatherService {
   static const String _host = 'nv5vxkv2bh.re.qweatherapi.com';
   static const String _baseUrl = 'https://$_host';
 
+  /// 逆地理只查城市名(与天气接口独立, 失败返回 '未知')
+  static Future<String> reverseCityName(double lon, double lat) async {
+    try {
+      final coord = '${lon.toStringAsFixed(4)},${lat.toStringAsFixed(4)}';
+      final response = await http.get(
+        Uri.parse('$_baseUrl/geo/v2/city/lookup?location=$coord&lang=zh'),
+        headers: {'X-QW-Api-Key': _apiKey},
+      ).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return '未知';
+      final data = json.decode(response.body);
+      final locations = data['location'];
+      if (locations == null || locations.isEmpty) return '未知';
+      final loc = locations[0];
+      final adm2 = loc['adm2'];
+      if (adm2 is String && adm2.isNotEmpty) return adm2;
+      return loc['name'] ?? '未知';
+    } catch (e) {
+      return '未知';
+    }
+  }
+
+  /// 天气+城市名一起取: 城市名优先独立逆地理结果, 失败时用天气接口自带兜底
+  static Future<WeatherData> fetchWeatherWithCity(double lon, double lat) async {
+    final results = await Future.wait([
+      reverseCityName(lon, lat),
+      fetchWeather(lon, lat),
+    ]);
+    final city = results[0] as String;
+    final weather = results[1] as WeatherData;
+    if (city != '未知' && city.isNotEmpty) weather.cityName = city;
+    return weather;
+  }
+
   static Future<WeatherData> fetchWeather(double lon, double lat) async {
     try {
       final coord = '${lon.toStringAsFixed(4)},${lat.toStringAsFixed(4)}';

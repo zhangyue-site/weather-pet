@@ -127,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     try {
       final position = await LocationService.getCurrentPosition();
       if (position != null) {
-        final weather = await WeatherService.fetchWeather(position.longitude, position.latitude);
+        final weather = await WeatherService.fetchWeatherWithCity(position.longitude, position.latitude);
         setState(() { _weather = weather; _isDemoMode = false; });
       } else {
         _startDemoMode();
@@ -233,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     else { _isPhoneRinging = false; _hasNewSms = false; _isCharging = false; _connectionType = 'wifi'; _batteryTemp = 25.0; }
 
     setState(() {
-      _weather = WeatherData(condition: condition, temperature: temp, humidity: 50, windSpeed: 5, cityName: '北京');
+      _weather = WeatherData(condition: condition, temperature: temp, humidity: 50, windSpeed: 5, cityName: '演示');
       _demoHour = hour;
       _demoMinute = minute;
       _demoPeriod = '$seasonEmoji $period';
@@ -510,7 +510,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(timeStr, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w300, color: Colors.white)),
-            Text('${_weather.cityName} · $period', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6))),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 210),
+              child: Text('${_weather.cityName} · $period',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6))),
+            ),
           ]),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${_weather.temperature.toStringAsFixed(0)}°',
