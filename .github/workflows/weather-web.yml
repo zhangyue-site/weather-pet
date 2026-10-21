@@ -1,0 +1,46 @@
+name: Weather pet web build
+run-name: ${{ inputs.release_id || format('Manual web {0} ({1})', inputs.build_name, inputs.build_number) }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Optional correlation ID
+        required: false
+        type: string
+      build_name:
+        description: Version
+        required: true
+        default: '1.0.0'
+      build_number:
+        description: Build number
+        required: true
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: weather_pet_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build web --release --base-href /wp/
+      - name: Package web build
+        run: |
+          cd build/web
+          zip -qry ../../weatherpet-web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weatherpet-web-${{ inputs.build_name }}-${{ inputs.build_number }}
+          path: weather_pet_app/build/weatherpet-web.zip
+          retention-days: 7
