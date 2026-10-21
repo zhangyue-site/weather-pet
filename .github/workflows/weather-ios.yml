@@ -16,12 +16,18 @@ on:
         description: Unique ascending Apple build number
         required: true
         default: '1'
+      screenshots_only:
+        description: Skip device build, screenshots only
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   ios:
+    if: ${{ inputs.screenshots_only != true }}
     runs-on: macos-15
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
