@@ -1,68 +1,36 @@
-# 天气小人 v2 (Weather Pet)
+# 小院天气 · 阿晴
 
-一个用 **Godot 4.4** 制作的 Android 桌面天气宠物，根据实时定位、天气、时间、节日驱动小人做出不同动作。
+只维护一个 Android 工程、一个人形角色和一个交付 APK：`builds/WeatherCompanion.apk`。天气、昼夜、公历、农历、节日和个人纪念日共同决定进入应用后看到的内容。
 
-## ✨ 功能
+## 当前进度与后续工作
 
-- 🌤 **真实天气**：和风天气 API（QWeather），根据 GPS 定位获取当地实时天气
-- 📍 **定位**：GPS 实时定位 + 14 个预设城市手动切换
-- 🎭 **30+ 种小人状态**：睡觉/吃饭/散步/撑伞/打雪仗/怕雷/发抖/热化/过节…
-- 🕐 **昼夜循环**：背景天空/城市灯光随真实时间变化
-- 🎉 **节日提醒**：自动识别节日触发庆祝动作
-- 🔋 **设备状态**：电量/信号实时显示
-- 👆 **触摸交互**：点击挥手、长按趴下、双击转圈
-- 🎨 **天气小人图标**：矢量绘制的可爱黄色小人
+完整状态、验证证据和按优先级排列的待办见 [开发交接](docs/handoff/weather-pet-main.md)。本分支保存 Godot「小院天气」成果；仓库默认分支 `flutter-rive-v3` 是另一条开发线，后续主线仍需结合实际体验确认。
 
-## 📱 演示模式
+2026-10-21 六组 Godot 测试复验通过，线上 OTA 1.2.1 和日历内容可达。本地同版本 APK 与线上清单哈希不一致，需先核对来源；实体手机、正式签名及完整角色动画仍待完成。APK 不随源码提交。
 
-无 Android 设备时，PC 上自动进入**演示模式**：轮播各种天气 + 加速过一天，便于预览所有效果。
+## 当前内容
 
-## 🏗 项目结构
+- 每年 365 天都有每日主题，另有 2 月 29 日，共 366 条每日内容。
+- 74 条节日、节气与纪念日规则；农历转换内置覆盖 2025–2036 年。2026 年逐日与香港天文台数据核对一致。
+- 200 套程序特效：20 种图形 × 10 种运动轨迹，可以在日历中的特效库查看。它们是画面特效，不是 200 套独立角色逐帧动画。
+- 可添加个人生日、农历生日（含闰月）、年度或一次性纪念日；哀思日使用克制的烛光效果，避免庆祝冲突。
+- 真实天气、定位或手选城市；下雨取伞、雨停收伞，以及冷、热、风、雪、昼夜和触摸互动。天气行为与日历画面共存。
+- 应用内 OTA：设置 → 应用更新。检查版本、主动下载、进度与取消、完整性及同签名验证、系统确认安装。已有数据随同包名更新保留。
+- 服务器下发日历规则和已有动作/特效组合；新增代码或美术资源通过 APK 更新。
 
-```
-godot_project/
-├── scripts/          # GDScript 代码
-│   ├── main_scene.gd     # 主场景: 背景 + HUD + 触摸交互
-│   ├── data_channel.gd   # 数据中枢: 插件/演示双分支
-│   ├── pet_fsm.gd        # 小人状态机
-│   ├── pet_renderer.gd   # 小人矢量绘制
-│   ├── cityscape.gd      # 城市背景
-│   ├── weather_fx.gd     # 天气粒子特效
-│   └── prop_system.gd    # 道具系统(伞/围巾等)
-├── plugin/           # Kotlin 插件源码
-│   └── .../WeatherPetPlugin.kt   # GPS定位 + 和风天气API + 系统广播
-├── android/          # Godot Android 导出工程
-│   ├── src/              # 插件 Kotlin 源码(打包时复制)
-│   └── AndroidManifest.xml
-├── icon.png          # 天气小人图标
-└── build_apk.sh      # 一键打包脚本
-```
+日历不是全球所有节日的全集；个人纪念日由用户添加。没有节日时仍有每日内容。离线可运行，联网失败继续使用已存日历。
 
-## 🔧 打包
+## 开发与交付
 
 ```bash
-cd godot_project
-bash build_apk.sh
+bash godot_project/run_tests.sh
+/Applications/Godot.app/Contents/MacOS/Godot --path godot_project
+python3 godot_project/build_companion.py
+python3 tools/publish_release.py
 ```
 
-产物：`WeatherPet_signed.apk`
+工程入口 `godot_project/project.godot`，场景 `companion/main.tscn`。构建使用 Godot 4.4.1、JDK 17、Android SDK 和本机缓存 Gradle。包名 `com.weather.companion`，1.2.1（103），arm64，沿用本机调试签名；后续覆盖更新必须保留相同签名身份。
 
-## ⚙️ 和风天气配置
+服务器已确认：124.222.88.195；腾讯云控制台到期时间为 **2029-08-07 14:04:42**。已复用新服务器上的有效证书恢复 HTTPS，OTA 与日历内容使用同一域名，详见 [服务器与 OTA](docs/服务器与OTA.md)。
 
-API Key 和 Host 配置在：
-`plugin/src/main/java/com/skydiver/weatherpet/plugin/WeatherPetPlugin.kt`
-
-```kotlin
-private val QWEATHER_KEY: String = "你的KEY"
-private val QWEATHER_HOST: String = "你的专属API Host"
-```
-
-注册：https://dev.qweather.com/
-
-## 📲 安装
-
-```bash
-adb install WeatherPet_signed.apk
-```
-
-首次打开需授权**定位权限**以获取当地真实天气。
+[每日内容清单](docs/calendar/每日内容.csv) · [200 特效目录](docs/calendar/特效目录.csv) · [内容下发协议](docs/服务器内容协议.md) · [历史版本清理记录](docs/清理记录.md)

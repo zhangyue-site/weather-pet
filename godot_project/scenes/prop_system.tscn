@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://c2bwx6dhlxt3b"]
-
-[ext_resource type="Script" uid="uid://dxqvjo0yvybdm" path="res://scripts/prop_system.gd" id="1"]
-
-[node name="PropSystem" type="Node2D"]
-script = ExtResource("1")

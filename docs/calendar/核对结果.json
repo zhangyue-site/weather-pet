@@ -1,0 +1,7 @@
+{
+  "source": "https://data.weather.gov.hk/weatherAPI/hko_data/calendar/nongli_calendar_2026.csv",
+  "checked_year": 2026,
+  "days_checked": 365,
+  "mismatches": 0,
+  "generator": "lunar_python 1.4.8"
+}

@@ -1,41 +1,26 @@
-# ============================================================
-#  天气小人 v2 - Git 忽略规则
-# ============================================================
-
-# ---- 构建产物 / APK ----
 *.apk
 *.aab
 *.idsig
-*.aab.idsig
-godot_project/base_resource.apk
-
-# ---- Gradle 构建缓存 (android/build 每次打包会重建, 勿提交) ----
-godot_project/android/build/
-godot_project/android/.gradle/
-godot_project/android/local.properties
-godot_project/plugin/build/
-godot_project/plugin/.gradle/
-godot_project/plugin/local.properties
-
-# ---- Godot Android 模板原生库 (100M+, 用户自行安装导出模板) ----
-godot_project/android/libs/
-
-# ---- android/assets 旧打包残留 ----
-godot_project/android/assets/
-
-# ---- Godot 导入缓存 ----
-godot_project/.godot/
-
-# ---- 其他无关项目目录 (不在本仓库范围) ----
-claude-code-desktop-pet/
-small-screen-animation/
-weather-figure/
-zuqiuxiaojiang/
-
-# ---- IDE / 系统文件 ----
 .DS_Store
-*.swp
-*.swo
-*~
-.vscode/
-.idea/
+.godot/
+.companion_build/
+builds/
+*.pyc
+__pycache__/
+
+# Local tools, credentials and build output
+.local/
+.mimosa/
+.v2c/
+.video_agent/
+.obs-code/
+out/
+.env
+.env.*
+*.keystore
+*.jks
+*.pem
+*.key
+# Separate server maintenance records are retained locally.
+docs/旧服务器恢复记录.md
+docs/服务器恢复验证.json
