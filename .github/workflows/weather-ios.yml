@@ -88,8 +88,8 @@ jobs:
           echo "udid=$UDID"
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl privacy "$UDID" grant location com.weatherpet.weatherPet
           xcrun simctl install "$UDID" build/ios/iphonesimulator/Runner.app
+          xcrun simctl privacy "$UDID" grant location com.weatherpet.weatherPet
           xcrun simctl location "$UDID" set 39.9042,116.4074
           xcrun simctl status_bar "$UDID" override --time "9:41" --batteryLevel 88 --wifiBars 3 --cellularBars 4
           xcrun simctl launch "$UDID" com.weatherpet.weatherPet
@@ -106,12 +106,14 @@ jobs:
           mkdir -p shots69
           for f in shots/*.png; do
             W=$(sips -g pixelWidth "$f" | awk '/pixelWidth/{print $2}')
-            if [ "$W" = "1320" ] || [ "$W" = "1290" ]; then
+            H=$(sips -g pixelHeight "$f" | awk '/pixelHeight/{print $2}')
+            if [ "$W" = "1290" ] && [ "$H" = "2796" ]; then
               cp "$f" "shots69/$(basename $f)"
             else
               sips -z 2796 1290 "$f" --out "shots69/$(basename $f)" >/dev/null
             fi
           done
+          sips -g pixelWidth -g pixelHeight shots69/shot-1.png
       - uses: actions/upload-artifact@v4
         with:
           name: weatherpet-screenshots
