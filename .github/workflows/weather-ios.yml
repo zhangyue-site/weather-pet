@@ -76,7 +76,11 @@ jobs:
         run: |
           set -x
           RID=$(xcrun simctl list runtimes | grep iOS | tail -1 | grep -oE 'com.apple.CoreSimulator.SimRuntime.iOS-[0-9-]+' | head -1)
-          DEVTYPE=$(xcrun simctl list devicetypes | grep iPhone | grep -E 'Pro Max|Plus' | tail -1 | grep -oE 'com.apple.CoreSimulator.SimDeviceType.[A-Za-z0-9-]+' | head -1)
+          DEVTYPE=""
+          for cand in com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro-Max com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro-Max; do
+            if xcrun simctl list devicetypes | grep -q "$cand"; then DEVTYPE="$cand"; break; fi
+          done
+          [ -n "$DEVTYPE" ] || DEVTYPE=$(xcrun simctl list devicetypes | grep -oE 'com.apple.CoreSimulator.SimDeviceType.iPhone-[0-9]+(-Pro)?-Max' | tail -1)
           echo "runtime=$RID devicetype=$DEVTYPE"
           NAME="wp-shots"
           xcrun simctl create "$NAME" "$DEVTYPE" "$RID"
