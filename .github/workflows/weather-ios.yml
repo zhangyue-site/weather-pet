@@ -1,0 +1,57 @@
+# registration bump: real git push
+name: Weather pet iOS release
+run-name: ${{ inputs.release_id || format('Manual {0} ({1})', inputs.build_name, inputs.build_number) }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Optional server release correlation ID
+        required: false
+        type: string
+      build_name:
+        description: Marketing version
+        required: true
+        default: '1.0.0'
+      build_number:
+        description: Unique ascending Apple build number
+        required: true
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    defaults:
+      run:
+        working-directory: weather_pet_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Analyze (advisory)
+        run: flutter analyze || echo "::warning::analyze reported issues; build continues"
+      - name: Build unsigned device app
+        env:
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: flutter build ios --release --no-codesign --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
+      - name: Package unsigned IPA for signing on server
+        run: |
+          mkdir -p build/unsigned/Payload
+          cp -R build/ios/iphoneos/Runner.app build/unsigned/Payload/
+          cd build/unsigned
+          zip -qry ../weatherpet-ios-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weatherpet-ios-unsigned-${{ inputs.build_name }}-${{ inputs.build_number }}
+          path: weather_pet_app/build/weatherpet-ios-unsigned.ipa
+          retention-days: 7
