@@ -1,3 +1,4 @@
+# registration bump: real git push
 name: Weather pet iOS release
 run-name: ${{ inputs.release_id || format('Manual {0} ({1})', inputs.build_name, inputs.build_number) }}
 
