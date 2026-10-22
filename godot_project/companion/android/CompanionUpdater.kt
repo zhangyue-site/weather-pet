@@ -48,16 +48,33 @@ class CompanionUpdater(godot: Godot) : GodotPlugin(godot) {
         require(url.protocol == "https" && url.host == host && url.userInfo == null && (url.port == -1 || url.port == 443) && url.path.startsWith(prefix) && !url.path.contains("..")) { "更新地址不受信任" }
         return url
     }
-    private fun connect(text: String): HttpsURLConnection {
+
+    /**
+     * 建立下载连接。fromBytes > 0 时携带 Range 头断点续传；200/206 均视为可用。
+     * 205 起替代旧 connect()：ResumeDownloader 续传协商专用入口。
+     */
+    private fun connectResume(text: String, fromBytes: Long): HttpsURLConnection {
         val c = checkedUrl(text).openConnection() as HttpsURLConnection
         c.connectTimeout = 15000
         c.readTimeout = 20000
         c.instanceFollowRedirects = false
         c.setRequestProperty("Accept-Encoding", "identity")
+        if (fromBytes > 0) c.setRequestProperty("Range", "bytes=$fromBytes-")
         connection = c
-        require(c.responseCode == 200) { "更新服务器返回 ${c.responseCode}" }
+        require(c.responseCode == 200 || c.responseCode == 206) { "更新服务器返回 ${c.responseCode}" }
         return c
     }
+
+    // —— 跨 dex 桥（ResumeDownloader 经 d8 编译在独立 dex，需包级 public 访问宿主私有成员）——
+    fun act(): android.app.Activity? = activity
+    fun verifyB(file: File, m: JSONObject) = verify(file, m)
+    fun reportB(state: String, message: String, extra: JSONObject = JSONObject()) = report(state, message, extra)
+    fun genGet(): Int = generation.get()
+    fun setReady(f: File) { readyFile = f }
+    fun maxBytes(): Long = maxApkBytes
+    fun finishB() { connection?.disconnect(); connection = null; busy = false }
+    fun connectResumeB(url: String, from: Long): HttpsURLConnection = connectResume(url, from)
+
     @UsedByGodot fun check_update(url: String) {
         if (busy) return
         val token = generation.incrementAndGet()
@@ -67,7 +84,7 @@ class CompanionUpdater(godot: Godot) : GodotPlugin(godot) {
         report("checking", "正在检查更新…")
         executor.execute {
             try {
-                val c = connect(url)
+                val c = connectResume(url, 0)
                 val bytes = c.inputStream.use { input ->
                     val out = java.io.ByteArrayOutputStream()
                     val buffer = ByteArray(4096)
@@ -107,56 +124,10 @@ class CompanionUpdater(godot: Godot) : GodotPlugin(godot) {
         busy = true
         val token = generation.incrementAndGet()
         executor.execute {
-            var partial: File? = null
             try {
-                val a = activity ?: error("应用已关闭")
-                val dir = File(a.cacheDir, "updates").apply { mkdirs() }
-                require(dir.usableSpace > m.getLong("bytes") * 2 + 10 * 1024 * 1024) { "手机存储空间不足" }
-                val part = File(dir, "update.part")
-                partial = part
-                val final = File(dir, "update.apk")
-                if (final.exists() && runCatching { verify(final, m) }.isSuccess) {
-                    readyFile = final
-                    report("ready", "安装包已校验，可以安装")
-                    return@execute
-                }
-                final.delete()
-                val c = connect(m.getString("url"))
-                val expected = m.getLong("bytes")
-                val length = c.getHeaderField("Content-Length")?.toLongOrNull() ?: -1L
-                require(length == -1L || length == expected) { "安装包大小与发布信息不一致" }
-                var received = 0L
-                var lastPercent = -1
-                c.inputStream.use { input ->
-                    part.outputStream().use { output ->
-                        val buffer = ByteArray(65536)
-                        while (true) {
-                            require(generation.get() == token) { "下载已取消" }
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            received += n
-                            require(received <= expected && received <= maxApkBytes) { "安装包超过预期大小" }
-                            output.write(buffer,0,n)
-                            val percent = (received * 100 / expected).toInt()
-                            if (percent != lastPercent) {
-                                lastPercent = percent
-                                report("downloading", "下载中 $percent%", JSONObject().put("percent", percent))
-                            }
-                        }
-                        output.fd.sync()
-                    }
-                }
-                require(received == expected) { "安装包未下载完整" }
-                verify(part,m)
-                require(generation.get() == token) { "下载已取消" }
-                require(part.renameTo(final)) { "无法保存安装包" }
-                readyFile = final
-                report("ready", "下载完成，校验通过")
-            } catch (e: Exception) {
-                partial?.delete()
-                if (generation.get() == token) report("error",e.message ?: "下载失败，请重试")
-            } finally {
-                connection?.disconnect(); connection = null; busy = false
+                ResumeDownloader.resume(this@CompanionUpdater, m, token)
+            } catch (_: Exception) {
+                // ResumeDownloader 自带完整错误处理与 busy 复位（finally），此处仅兜底防逃逸
             }
         }
     }
