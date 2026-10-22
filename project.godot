@@ -1,0 +1,36 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="小院天气"
+config/description="实时天气同步的桌面电子宠物"
+run/main_scene="res://companion/main.tscn"
+config/features=PackedStringArray("4.4")
+config/icon="res://companion/art/icon.png"
+config/use_custom_icon=true
+
+[display]
+
+window/size/viewport_width=540
+window/size/viewport_height=960
+window/size/resizable=false
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[gdextensions]
+
+android_enabled=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
