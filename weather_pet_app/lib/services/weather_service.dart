@@ -1,6 +1,32 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/weather.dart';
+
+/// 本地天气缓存：启动先显示上次数据，网络回来再刷新（双端通用）
+class WeatherCache {
+  static const String _key = 'weather_cache_v1';
+
+  static Future<void> save(WeatherData w) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, json.encode(w.toJson()));
+    } catch (_) {}
+  }
+
+  static Future<WeatherData?> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw == null || raw.isEmpty) return null;
+      final map = json.decode(raw);
+      if (map is! Map<String, dynamic>) return null;
+      return WeatherData.fromJson(map);
+    } catch (_) {
+      return null;
+    }
+  }
+}
 
 class WeatherService {
   static const String _apiKey = 'be785dbd3cab4f0d9cc27b3d8a1f3de3';
@@ -28,15 +54,21 @@ class WeatherService {
     }
   }
 
-  /// 天气+城市名一起取: 城市名优先独立逆地理结果, 失败时用天气接口自带兜底
+  /// 天气+城市名一起取: 并发请求；逆地理失败时沿用缓存城市名
   static Future<WeatherData> fetchWeatherWithCity(double lon, double lat) async {
+    final cached = await WeatherCache.load();
     final results = await Future.wait([
       reverseCityName(lon, lat),
       fetchWeather(lon, lat),
     ]);
     final city = results[0] as String;
     final weather = results[1] as WeatherData;
-    if (city != '未知' && city.isNotEmpty) weather.cityName = city;
+    if (city != '未知' && city.isNotEmpty) {
+      weather.cityName = city;
+    } else if (cached != null &&
+        cached.cityName != '定位中…' && cached.cityName != '未知') {
+      weather.cityName = cached.cityName;
+    }
     return weather;
   }
 
@@ -58,17 +90,15 @@ class WeatherService {
       final iconCode = now['icon'] ?? '100';
       final condition = _mapIconCode(iconCode);
 
-      // 同时获取城市名
-      final cityName = await fetchCityName(lon, lat);
-
-      return WeatherData(
+      final weather = WeatherData(
         condition: condition,
         temperature: double.tryParse(now['temp'] ?? '22') ?? 22.0,
         humidity: double.tryParse(now['humidity'] ?? '50') ?? 50.0,
         windSpeed: double.tryParse(now['windSpeed'] ?? '5') ?? 5.0,
         feelsLike: double.tryParse(now['feelsLike'] ?? '22') ?? 22.0,
-        cityName: cityName,
       );
+      await WeatherCache.save(weather);
+      return weather;
     } catch (e) {
       return WeatherData();
     }
