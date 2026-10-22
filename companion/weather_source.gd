@@ -12,6 +12,11 @@ var refresh_elapsed: = 0.0
 var custom_target: Dictionary = {}
 var pending_key: = "0"
 var pending_name: = "上海"
+const PROXY_URL: = "https://zz.zhangyue.site/om/v1/forecast"
+const DIRECT_URL: = "https://api.open-meteo.com/v1/forecast"
+var use_fallback: = false
+var last_query: = ""
+var req_gen: = 0
 
 func _ready() -> void :
 	request_node = HTTPRequest.new()
@@ -33,7 +38,7 @@ func _process(delta: float) -> void :
 
 func stop() -> void :
 	enabled = false
-	request_node.cancel_request()
+	if request_node != null and is_instance_valid(request_node): request_node.cancel_request()
 
 func fetch(index: int) -> void :
 	city_index = clampi(index, 0, Catalog.CITIES.size() - 1)
@@ -59,17 +64,18 @@ func _fetch_target(city: Dictionary, key: String) -> void :
 			last_data = saved
 			updated.emit(saved)
 	status_changed.emit("正在更新天气…")
-	var url: = "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&daily=sunrise,sunset&forecast_days=1&timezone=auto" % [city.lat, city.lon]
-	var error: = request_node.request(url)
-	if error != OK: _failed()
+	last_query = "latitude=%.4f&longitude=%.4f&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&daily=sunrise,sunset&forecast_days=1&timezone=auto" % [city.lat, city.lon]
+	use_fallback = false
+	_request(PROXY_URL, 8.0)
 
 func _failed() -> void :
 	status_changed.emit("网络暂不可用 · 使用缓存" if not last_data.is_empty() else "暂无天气 · 请重试或体验场景")
 
 func _completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void :
 	if not enabled: return
+	if int(get_meta("gen", -1)) != req_gen: return
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		_failed()
+		_retry_or_fail()
 		return
 	var json = JSON.parse_string(body.get_string_from_utf8())
 	if not json is Dictionary or not json.get("current") is Dictionary:
@@ -112,3 +118,31 @@ static func clock_state(data: Dictionary, unix_now: float = -1.0) -> Dictionary:
 	elif minute <= rise + 25: phase = "dawn"
 	elif minute >= setting - 25: phase = "dusk"
 	return {"hour": int(local.hour), "minute": int(local.minute), "is_day": phase != "night", "phase": phase}
+
+
+func _request(base: String, timeout: float) -> void :
+	req_gen += 1
+	set_meta("gen", req_gen)
+	request_node.timeout = timeout
+	var error: = request_node.request(base + "?" + last_query)
+	if error != OK: _retry_or_fail()
+
+func _retry_or_fail() -> void :
+	if not use_fallback:
+		use_fallback = true
+		status_changed.emit("主线路慢 · 换备用线路")
+		_request(DIRECT_URL, 14.0)
+	else:
+		_failed()
+
+func rename_current_city(city_name: String) -> void :
+	if custom_target.is_empty(): return
+	custom_target["name"] = city_name
+	pending_name = city_name
+	if last_data.is_empty() or String(last_data.get("city", "")) != "当前位置": return
+	last_data["city"] = city_name
+	if cache.has(pending_key):
+		cache[pending_key]["city"] = city_name
+		var f: = FileAccess.open("user://companion_weather.json", FileAccess.WRITE)
+		if f: f.store_string(JSON.stringify(cache))
+	updated.emit(last_data)

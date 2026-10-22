@@ -87,7 +87,8 @@ func _ready() -> void :
 	if Engine.has_singleton("CompanionLocation"):
 		location_plugin = Engine.get_singleton("CompanionLocation")
 		location_plugin.connect("location_ready", _on_location)
-		location_plugin.connect("location_error", func(message): network_status = String(message);_refresh_labels())
+		location_plugin.connect("location_name_ready", _on_location_name)
+		location_plugin.connect("location_error", _on_location_error)
 	actor = Actor.new()
 	actor.world = world
 	add_child(actor)
@@ -398,7 +399,11 @@ func _refresh_labels() -> void :
 	var time: = Time.get_datetime_dict_from_system()
 	if has_live:
 		time = WeatherSource.clock_state(live_data)
-	clock_label.text = "%02d:%02d  ·  %s" % [time.hour, time.minute, "体验" if mode == "demo" else ("当前位置" if use_location and location_plugin != null else Catalog.CITIES[city_index].name)]
+	var city_text: String = Catalog.CITIES[city_index].name
+	if mode != "demo":
+		if use_location and location_plugin != null:
+			city_text = String(live_data.get("city", "定位中…")) if has_live else "定位中…"
+	clock_label.text = "%02d:%02d  ·  %s" % [time.hour, time.minute, "体验" if mode == "demo" else city_text]
 	if mode == "demo":
 		source_label.text = "天气体验 · " + ("自动漫游中" if cinematic else "可以切换不同天气")
 	elif has_live:
@@ -457,7 +462,22 @@ func _on_location(json: String) -> void :
 	if mode != "live" or not use_location: return
 	var coordinates = JSON.parse_string(json)
 	if coordinates is Dictionary and coordinates.has("lat") and coordinates.has("lon"):
+		network_status = "已定位 · 获取天气中"
+		_refresh_labels()
 		source.fetch_coordinates(float(coordinates.lat), float(coordinates.lon))
+
+func _on_location_name(city_name: String) -> void :
+	if mode != "live" or not use_location: return
+	var clean: = String(city_name).strip_edges()
+	if clean.is_empty(): return
+	source.rename_current_city(clean)
+	_refresh_labels()
+
+func _on_location_error(message: String) -> void :
+	if mode != "live" or not use_location: return
+	network_status = String(message)
+	source.fetch(city_index)
+	_refresh_labels()
 
 func _close_sheet() -> void :
 	opened_sheet = ""
