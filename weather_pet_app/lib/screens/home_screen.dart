@@ -102,11 +102,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _initApp() async {
-    await _loadWeather();
     _startTimers();
     _phoneService.startMonitoring(demoMode: _isDemoMode);
     _startPhoneStateSync();
-    setState(() => _isLoading = false);
+    final cached = await WeatherCache.load();
+    if (cached != null) {
+      if (!mounted) return;
+      setState(() {
+        _weather = cached;
+        _isDemoMode = false;
+        _isLoading = false;
+      });
+      _refreshWeather();
+      return;
+    }
+    await _loadWeather().timeout(const Duration(seconds: 12), onTimeout: () {});
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  /// 后台刷新缓存天气：失败保持现状，不再回落演示模式
+  Future<void> _refreshWeather() async {
+    try {
+      final position = await LocationService.getCurrentPosition();
+      if (position == null || !mounted) return;
+      final weather = await WeatherService.fetchWeatherWithCity(
+          position.longitude, position.latitude);
+      if (!mounted) return;
+      setState(() { _weather = weather; _isDemoMode = false; });
+    } catch (_) {}
   }
 
   void _startPhoneStateSync() {
