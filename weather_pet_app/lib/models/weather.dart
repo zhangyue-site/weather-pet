@@ -26,6 +26,16 @@ class WeatherData {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'condition': condition,
+        'temperature': temperature,
+        'humidity': humidity,
+        'wind_speed': windSpeed,
+        'feels_like': feelsLike,
+        'city_name': cityName,
+        'saved_at': DateTime.now().millisecondsSinceEpoch,
+      };
+
   String get conditionLabel {
     const labels = {
       'clear': '晴朗', 'cloudy': '多云', 'overcast': '阴天',
