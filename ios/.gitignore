@@ -1,0 +1,6 @@
+.build/
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+CompanionCore/.build/
+CompanionCore/.swiftpm/
