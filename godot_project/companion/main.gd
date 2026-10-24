@@ -6,35 +6,50 @@ const Events = preload("res://companion/events.gd")
 const EventSource = preload("res://companion/event_source.gd")
 const Calendar = preload("res://companion/calendar_data.gd")
 const CalendarEffects = preload("res://companion/calendar_effects.gd")
+const Ambience = preload("res://companion/ambience.gd")
+const Duet = preload("res://companion/duet.gd")
+const DuetProps = preload("res://companion/duet_props.gd")
+const LocationName = preload("res://companion/location_name.gd")
+const AndroidBridge = preload("res://companion/android_bridge.gd")
 const Actor = preload("res://companion/actor.gd")
 const Effects = preload("res://companion/effects.gd")
-const INK := Color("293e42")
-const MUTED := Color("738181")
-const CREAM := Color("fffaf0")
-const TEAL := Color("347c7e")
+const FishActor = preload("res://companion/fish_actor.gd")
+const INK: = Color("293e42")
+const MUTED: = Color("738181")
+const CREAM: = Color("fffaf0")
+const TEAL: = Color("347c7e")
 
 var world = World.new()
+var duet = Duet.new()
+var duet_props: Node2D
+var ambience = Ambience.new()
+var ambience_enabled := true
+var ambience_low_power := false
+var battery_elapsed := 10.0
 var calendar_effects: Node2D
 var anniversaries: Array = []
-var program_key := ""
-var preview_date := ""
-var effect_page := 0
+var program_key: = ""
+var preview_date: = ""
+var effect_page: = 0
 var calendar_label: Label
 var updater: Object
 var update_data: Dictionary = {}
 var update_text: Label
-var update_url := "https://zz.zhangyue.site/weather-companion/latest.json"
-var opened_sheet := ""
+var update_url := ""
+var opened_sheet: = ""
 var event_source: Node
-var festival_preview := false
+var festival_preview: = false
 var festival_label: Label
 var source: Node
 var actor: Node2D
 var effects: Node2D
+var fish: Node2D
+var fish_enabled: = true
+var fish_page := 0
 var backgrounds: Dictionary = {}
-var background_now := "day"
-var background_before := "day"
-var background_mix := 1.0
+var background_now: = "day"
+var background_before: = "day"
+var background_mix: = 1.0
 var ui: Control
 var top: Control
 var bottom: PanelContainer
@@ -43,6 +58,12 @@ var weather_label: Label
 var details_label: Label
 var source_label: Label
 var clock_label: Label
+var location_label: Label
+var location_state := "waiting"
+var location_city := ""
+var location_name_pending := false
+var location_name_elapsed := 0.0
+var location_names: Node
 var status_label: Label
 var caption_label: Label
 var bond_label: Label
@@ -51,49 +72,47 @@ var shade: ColorRect
 var sheet_scroll: ScrollContainer
 var sheet_content: VBoxContainer
 var font: Font
-var mode := "live"
-var city_index := 0
-var network_status := "正在连接天气"
+var mode: = "live"
+var city_index: = 0
+var network_status: = "正在连接天气"
 var live_data: Dictionary = {}
-var cinematic := false
-var cinematic_time := 0.0
-var cinematic_index := -1
-var save_elapsed := 0.0
-var ui_elapsed := 0.0
-var touch_start := Vector2.ZERO
-var touch_time := 0.0
-var touching := false
-var capture_mode := false
-var reduced_motion := false
-var quiet_mode := false
+var cinematic: = false
+var cinematic_time: = 0.0
+var cinematic_index: = -1
+var save_elapsed: = 0.0
+var ui_elapsed: = 0.0
+var touch_start: = Vector2.ZERO
+var touch_time: = 0.0
+var touching: = false
+var capture_mode: = false
+var reduced_motion: = false
+var quiet_mode: = false
 var settings: Dictionary = {}
-var use_location := true
-var location_title := "正在定位…"
+var use_location: = true
 var location_plugin: Object
 
-func _ready() -> void:
+func _ready() -> void :
+	_load_release_config()
 	font = load("res://companion/fonts/NotoSansSC.ttf")
 	for id in ["day", "rain", "snow", "night"]: backgrounds[id] = load("res://companion/art/%s.png" % id)
+	ambience.configure(backgrounds.day.get_size())
 	if Engine.has_singleton("CompanionUpdater"):
 		updater = Engine.get_singleton("CompanionUpdater")
-		updater.connect("update_state",_on_update_state)
+		updater.connect("update_state", _on_update_state)
 	_load_saved()
+	location_names = LocationName.new()
+	add_child(location_names)
+	location_names.resolved.connect(_on_resolved_name)
 	source = WeatherSource.new()
 	add_child(source)
 	source.updated.connect(_on_live_weather)
-	source.status_changed.connect(func(s): network_status = s; _refresh_labels())
+	source.status_changed.connect( func(s): network_status = s;_refresh_labels())
 	if Engine.has_singleton("CompanionLocation"):
 		location_plugin = Engine.get_singleton("CompanionLocation")
-		location_plugin.connect("location_ready",_on_location)
-		location_plugin.connect("location_error",func(message):
-			if mode != "live" or not use_location: return
-			location_title = "定位未成功"
-			network_status = String(message)
-			_refresh_labels())
-		location_plugin.connect("location_name_ready",func(place):
-			if mode != "live" or not use_location: return
-			location_title = String(place)
-			_refresh_labels())
+		location_plugin.connect("location_ready", _on_location)
+		if location_plugin.has_signal("location_name_ready"):
+			location_plugin.connect("location_name_ready", _on_location_name)
+		location_plugin.connect("location_error", _on_location_error)
 	actor = Actor.new()
 	actor.world = world
 	add_child(actor)
@@ -101,6 +120,15 @@ func _ready() -> void:
 	effects.world = world
 	effects.actor = actor
 	add_child(effects)
+	fish = FishActor.new()
+	fish.world = world
+	fish.respond = _fish_wave_back
+	fish.enabled = fish_enabled
+	fish.memory = settings.get("fish_memory", {}).duplicate(true)
+	add_child(fish)
+	duet_props = DuetProps.new()
+	duet_props.duet = duet; duet_props.actor = actor; duet_props.fish = fish
+	add_child(duet_props)
 	event_source = EventSource.new()
 	add_child(event_source)
 	event_source.changed.connect(_update_festival)
@@ -119,32 +147,46 @@ func _ready() -> void:
 		_use_live()
 	_refresh_labels()
 
+func _load_release_config() -> void:
+	var path := "res://companion/release.json"
+	if not FileAccess.file_exists(path): return
+	var config = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not config is Dictionary or config.size()!=1 or not config.get("update_url") is String: return
+	var endpoint: String = config.update_url
+	for character in endpoint.to_utf8_buffer():
+		if character <= 32 or character == 127:return
+	if endpoint.begins_with("https://") and not endpoint.contains("@") and not endpoint.contains("#") and not endpoint.contains(" ") and not endpoint.contains("\n"):
+		update_url=endpoint
+
 func _today() -> String:
 	if not preview_date.is_empty(): return preview_date
 	if mode == "live" and not live_data.is_empty():
 		return Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) + int(live_data.get("utc_offset", 28800)))
 	return Time.get_date_string_from_system()
 
-func _update_festival() -> void:
+func _update_festival() -> void :
 	if festival_preview or event_source == null: return
-	var date := _today()
-	var key := date + ":" + str(event_source.catalog.revision) + ":" + str(anniversaries.hash())
+	var date: = _today()
+	var key: = date + ":" + str(event_source.catalog.revision) + ":" + str(anniversaries.hash())
 	if key == program_key: return
 	program_key = key
 	world.set_festival(Events.program(event_source.catalog, date, anniversaries))
 
-func _preview_festival(event: Dictionary) -> void:
+func _preview_festival(event: Dictionary) -> void :
+	duet.cancel(world,fish)
 	set_demo("clear")
 	festival_preview = true
-	var program := event.duplicate(true)
-	program["effect_ids"] = [event.get("effect","confetti_burst")]
+	var program: = event.duplicate(true)
+	program["effect_ids"] = [event.get("effect", "confetti_burst")]
 	world.set_festival(program)
 	world.queue.clear()
 	world.celebrate()
 	_refresh_labels()
+	fish.request_show(true)
 	_close_sheet()
 
-func _preview_date(date: String) -> void:
+func _preview_date(date: String) -> void :
+	duet.cancel(world,fish)
 	set_demo("clear")
 	preview_date = date
 	program_key = ""
@@ -152,61 +194,98 @@ func _preview_date(date: String) -> void:
 	world.queue.clear()
 	world.celebrate()
 	_refresh_labels()
+	fish.request_show(true)
 	_close_sheet()
 
-func _load_saved() -> void:
-	var f := FileAccess.open("user://companion_save.json", FileAccess.READ)
+func _load_saved() -> void :
+	var f: = FileAccess.open("user://companion_save.json", FileAccess.READ)
 	if f:
 		var d = JSON.parse_string(f.get_as_text())
 		if d is Dictionary:
 			settings = d
 			if d.get("anniversaries") is Array:
-				for event in d.anniversaries.slice(0,64):
+				for event in d.anniversaries.slice(0, 64):
 					if Events.valid_event(event): anniversaries.append(event)
-			city_index = clampi(int(d.get("city",0)),0,Catalog.CITIES.size()-1)
-			use_location = bool(d.get("use_location",true))
-			reduced_motion = bool(d.get("reduced_motion",false))
+			city_index = clampi(int(d.get("city", 0)), 0, Catalog.CITIES.size() - 1)
+			use_location = bool(d.get("use_location", true))
+			fish_enabled = bool(d.get("fish_enabled", true))
+			ambience_enabled = bool(d.get("ambience_enabled",true))
+			reduced_motion = bool(d.get("reduced_motion", false))
 			if d.get("world") is Dictionary: world.restore(d.world)
 	if settings.is_empty(): world.restore({})
 
-func _save() -> void:
+func _save() -> void :
 	if capture_mode: return
-	var f := FileAccess.open("user://companion_save.json", FileAccess.WRITE)
-	if f: f.store_string(JSON.stringify({"city":city_index,"use_location":use_location,"world":world.save_data(),"reduced_motion":reduced_motion,"anniversaries":anniversaries}))
+	var f: = FileAccess.open("user://companion_save.json", FileAccess.WRITE)
+	if f: f.store_string(JSON.stringify({"city": city_index, "use_location": use_location, "world": world.save_data(), "reduced_motion": reduced_motion, "anniversaries": anniversaries, "fish_enabled": fish_enabled, "ambience_enabled": ambience_enabled, "fish_memory": fish.memory if fish != null else settings.get("fish_memory", {})}))
 
-func _notification(what: int) -> void:
+func _notification(what: int) -> void :
 	if what == NOTIFICATION_APPLICATION_PAUSED:
 		_save()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_save()
 		get_tree().quit()
 
-func _process(delta: float) -> void:
+func _process(delta: float) -> void :
+	if location_name_pending:
+		location_name_elapsed += delta
+		if location_name_elapsed >= 10:
+			location_name_pending = false; location_names.cancel(); _refresh_labels()
 	world.step(delta)
-	background_mix = minf(1.0,background_mix+delta*0.6)
+	duet.step(delta,world,fish)
+	background_mix = minf(1.0, background_mix + delta * 0.6)
 	save_elapsed += delta
 	ui_elapsed += delta
-	if save_elapsed >= 20: save_elapsed = 0; _save()
-	if ui_elapsed > 0.15: ui_elapsed = 0; _update_festival(); _refresh_labels()
+	if save_elapsed >= 20: save_elapsed = 0;_save()
+	if ui_elapsed > 0.15: ui_elapsed = 0;_update_festival();_refresh_labels()
 	if cinematic:
 		cinematic_time += delta
-		var slot := int(cinematic_time / 18) % Catalog.IDS.size()
+		var slot: = int(cinematic_time / 18) % Catalog.IDS.size()
 		if slot != cinematic_index:
 			cinematic_index = slot
 			set_demo(Catalog.IDS[slot], false)
 	_update_background()
-	var size := get_viewport_rect().size
-	actor.foot = Vector2(world.x*size.x, size.y*0.80)
-	actor.body_height = minf(size.y*0.27,265)
+	battery_elapsed += delta
+	if battery_elapsed >= 10:
+		battery_elapsed = 0
+		ambience_low_power = _android_low_power()
+	ambience.update(delta,self,ambience_enabled,reduced_motion,ambience_low_power,background_now == "day",duet.active)
+	var size: = get_viewport_rect().size
+	actor.foot = Vector2(world.x * size.x, size.y * 0.8)
+	actor.body_height = minf(size.y * 0.27, 265)
 	calendar_effects.reduced_motion = reduced_motion
 	effects.visible = not reduced_motion
-	actor.set_process(not reduced_motion)
-	actor.queue_redraw()
+	fish.reduced = reduced_motion
+	actor.update_visual()
 	queue_redraw()
 
-func _update_background() -> void:
+func _android_low_power() -> bool:
+	if not AndroidBridge.mutex.try_lock(): return ambience_low_power
+	var value := _read_android_low_power()
+	AndroidBridge.mutex.unlock()
+	return value
+
+func _read_android_low_power() -> bool:
+	# Godot 4.4 has no portable battery API. Use its existing Android runtime bridge.
+	if not OS.has_feature("android") or not Engine.has_singleton("AndroidRuntime"): return false
+	var runtime = Engine.get_singleton("AndroidRuntime")
+	var context = runtime.getApplicationContext()
+	if JavaClassWrapper.get_exception() != null or context == null: return false
+	var power = context.getSystemService("power")
+	if JavaClassWrapper.get_exception() != null: return false
+	if power != null:
+		var saver = power.isPowerSaveMode()
+		if JavaClassWrapper.get_exception() != null: return false
+		if bool(saver): return true
+	var battery = context.getSystemService("batterymanager")
+	if JavaClassWrapper.get_exception() != null or battery == null: return false
+	var percent = battery.getIntProperty(4) # BATTERY_PROPERTY_CAPACITY, Android API21+
+	if JavaClassWrapper.get_exception() != null: return false
+	return int(percent) >= 0 and int(percent) <= 20
+
+func _update_background() -> void :
 	var id: String = world.environment.id
-	var next := "day"
+	var next: = "day"
 	if Catalog.is_rain(id) or id in ["overcast", "fog"]: next = "rain"
 	elif Catalog.is_snow(id) or id == "cold": next = "snow"
 	elif not bool(world.environment.is_day): next = "night"
@@ -216,41 +295,42 @@ func _update_background() -> void:
 		background_mix = 0
 
 func _background_rect(tex: Texture2D) -> Rect2:
-	var size := get_viewport_rect().size
-	var factor := maxf(size.x/tex.get_width(),size.y/tex.get_height())
-	var scaled := tex.get_size()*factor
-	return Rect2((size-scaled)*0.5,scaled)
+	var size: = get_viewport_rect().size
+	var factor: = maxf(size.x / tex.get_width(), size.y / tex.get_height())
+	var scaled: = tex.get_size() * factor
+	return Rect2((size - scaled) * 0.5, scaled)
 
-func _draw() -> void:
+func _draw() -> void :
 	if backgrounds.is_empty(): return
-	var size := get_viewport_rect().size
-	var tint := Color.WHITE
+	var size: = get_viewport_rect().size
+	var tint: = Color.WHITE
 	var id: String = world.environment.id
-	if id == "cloudy": tint = Color(0.88,0.93,0.98)
-	if id == "dawn": tint = Color(1,0.91,0.86)
-	if id == "dusk": tint = Color(1,0.77,0.59)
-	if mode == "live" and world.environment.get("phase", "") == "dawn": tint = Color(1,0.91,0.86)
-	if mode == "live" and world.environment.get("phase", "") == "dusk": tint = Color(1,0.77,0.59)
-	if id == "hot": tint = Color(1,0.96,0.82)
-	if not bool(world.environment.is_day) and background_now != "night": tint = Color(0.43,0.50,0.67)
-	var previous: Texture2D = backgrounds[background_before]
-	draw_texture_rect(previous,_background_rect(previous),false,tint)
+	if id == "cloudy": tint = Color(0.88, 0.93, 0.98)
+	if id == "dawn": tint = Color(1, 0.91, 0.86)
+	if id == "dusk": tint = Color(1, 0.77, 0.59)
+	if mode == "live" and world.environment.get("phase", "") == "dawn": tint = Color(1, 0.91, 0.86)
+	if mode == "live" and world.environment.get("phase", "") == "dusk": tint = Color(1, 0.77, 0.59)
+	if id == "hot": tint = Color(1, 0.96, 0.82)
+	if not bool(world.environment.is_day) and background_now != "night": tint = Color(0.43, 0.5, 0.67)
+	if background_mix < 1.0:
+		var previous: Texture2D = backgrounds[background_before]
+		draw_texture_rect(previous, _background_rect(previous), false, tint)
 	var current: Texture2D = backgrounds[background_now]
-	draw_texture_rect(current,_background_rect(current),false,Color(tint,background_mix))
-	# A little dampness lingers after rain rather than disappearing with the weather code.
+	draw_texture_rect(current, _background_rect(current), false, Color(tint, background_mix))
+
 	if background_now == "day" and world.puddle > 0.01:
 		var rain: Texture2D = backgrounds.rain
-		draw_texture_rect(rain,_background_rect(rain),false,Color(1,1,1,world.puddle*0.14))
-	# Readable quiet sky and bottom controls; no physical-screen scaling.
+		draw_texture_rect(rain, _background_rect(rain), false, Color(1, 1, 1, world.puddle * 0.14))
+
 	for i in range(24):
-		var alpha := (1.0-float(i)/24.0)*0.25
-		draw_rect(Rect2(0,i*12,size.x,12),Color(0.05,0.13,0.20,alpha))
-	draw_set_transform(actor.foot+Vector2(0,2),0,Vector2(1,0.24))
-	draw_circle(Vector2.ZERO,actor.body_height*0.25,Color(0.08,0.12,0.13,0.20))
+		var alpha: = (1.0 - float(i) / 24.0) * 0.25
+		draw_rect(Rect2(0, i * 12, size.x, 12), Color(0.05, 0.13, 0.2, alpha))
+	draw_set_transform(actor.foot + Vector2(0, 2), 0, Vector2(1, 0.24))
+	draw_circle(Vector2.ZERO, actor.body_height * 0.25, Color(0.08, 0.12, 0.13, 0.2))
 	draw_set_transform(Vector2.ZERO)
 
 func _style(color: Color, radius: int = 20, border: Color = Color.TRANSPARENT) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+	var s: = StyleBoxFlat.new()
 	s.bg_color = color
 	s.set_corner_radius_all(radius)
 	s.set_border_width_all(1 if border.a > 0 else 0)
@@ -262,34 +342,34 @@ func _style(color: Color, radius: int = 20, border: Color = Color.TRANSPARENT) -
 	return s
 
 func _label(text: String, size: int = 18, color: Color = INK) -> Label:
-	var l := Label.new()
+	var l: = Label.new()
 	l.text = text
-	l.add_theme_font_override("font",font)
-	l.add_theme_font_size_override("font_size",size)
-	l.add_theme_color_override("font_color",color)
+	l.add_theme_font_override("font", font)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
 
-func _button(text: String, callback: Callable, active := false) -> Button:
-	var b := Button.new()
+func _button(text: String, callback: Callable, active: = false) -> Button:
+	var b: = Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(0,46)
+	b.custom_minimum_size = Vector2(0, 46)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.add_theme_font_override("font",font)
-	b.add_theme_font_size_override("font_size",16)
-	b.add_theme_color_override("font_color",Color.WHITE if active else INK)
-	b.add_theme_color_override("font_hover_color",Color.WHITE if active else INK)
-	b.add_theme_color_override("font_focus_color",Color.WHITE if active else INK)
-	b.add_theme_color_override("font_pressed_color",Color.WHITE)
-	b.add_theme_stylebox_override("normal",_style(TEAL if active else Color("f0eee6"),14))
-	b.add_theme_stylebox_override("hover",_style(Color("588e89") if active else Color("dce8df"),14))
-	b.add_theme_stylebox_override("pressed",_style(Color("245e62"),14))
-	b.add_theme_stylebox_override("focus",_style(Color(0,0,0,0),14,Color("d8b066")))
+	b.add_theme_font_override("font", font)
+	b.add_theme_font_size_override("font_size", 16)
+	b.add_theme_color_override("font_color", Color.WHITE if active else INK)
+	b.add_theme_color_override("font_hover_color", Color.WHITE if active else INK)
+	b.add_theme_color_override("font_focus_color", Color.WHITE if active else INK)
+	b.add_theme_color_override("font_pressed_color", Color.WHITE)
+	b.add_theme_stylebox_override("normal", _style(TEAL if active else Color("f0eee6"), 14))
+	b.add_theme_stylebox_override("hover", _style(Color("588e89") if active else Color("dce8df"), 14))
+	b.add_theme_stylebox_override("pressed", _style(Color("245e62"), 14))
+	b.add_theme_stylebox_override("focus", _style(Color(0, 0, 0, 0), 14, Color("d8b066")))
 	b.pressed.connect(callback)
 	return b
 
-func _build_ui() -> void:
-	var layer := CanvasLayer.new()
+func _build_ui() -> void :
+	var layer: = CanvasLayer.new()
 	layer.layer = 10
 	add_child(layer)
 	ui = Control.new()
@@ -299,92 +379,97 @@ func _build_ui() -> void:
 	top = Control.new()
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(top)
-	title_label = _label("小院天气",23,Color.WHITE)
-	title_label.position = Vector2(28,30)
+	title_label = _label("小院天气", 23, Color.WHITE)
+	title_label.position = Vector2(28, 30)
 	top.add_child(title_label)
-	clock_label = _label("",14,Color(1,1,1,0.85))
+	location_label = _label("",14,Color(1,1,1,0.88))
+	location_label.position = Vector2(30,65)
+	location_label.size = Vector2(360,25)
+	location_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	top.add_child(location_label)
+	clock_label = _label("", 14, Color(1, 1, 1, 0.85))
 	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	top.add_child(clock_label)
-	weather_label = _label("--°",66,Color.WHITE)
-	weather_label.position = Vector2(27,72)
+	weather_label = _label("--°", 66, Color.WHITE)
+	weather_label.position = Vector2(27, 72)
 	top.add_child(weather_label)
-	details_label = _label("",16,Color(1,1,1,0.92))
-	details_label.position = Vector2(30,162)
+	details_label = _label("", 16, Color(1, 1, 1, 0.92))
+	details_label.position = Vector2(30, 162)
 	top.add_child(details_label)
-	source_label = _label("",12,Color(1,1,1,0.72))
-	source_label.position = Vector2(30,193)
+	source_label = _label("", 12, Color(1, 1, 1, 0.72))
+	source_label.position = Vector2(30, 193)
 	top.add_child(source_label)
-	festival_label = _label("",20,Color("ffe1a1"))
-	festival_label.position = Vector2(30,229)
-	festival_label.size = Vector2(480,28)
+	festival_label = _label("", 20, Color("ffe1a1"))
+	festival_label.position = Vector2(30, 229)
+	festival_label.size = Vector2(480, 28)
 	festival_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	top.add_child(festival_label)
-	calendar_label = _label("",13,Color(1,1,1,0.88))
-	calendar_label.position = Vector2(30,263)
+	calendar_label = _label("", 13, Color(1, 1, 1, 0.88))
+	calendar_label.position = Vector2(30, 263)
 	top.add_child(calendar_label)
-	var settings_button := _button("设置",func(): _open_sheet("settings"))
+	var settings_button: = _button("设置", func(): _open_sheet("settings"))
 	settings_button.name = "SettingsButton"
 	top.add_child(settings_button)
 	bottom = PanelContainer.new()
-	bottom.add_theme_stylebox_override("panel",_style(Color(1,0.985,0.945,0.96),24))
+	bottom.add_theme_stylebox_override("panel", _style(Color(1, 0.985, 0.945, 0.96), 24))
 	ui.add_child(bottom)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation",7)
+	var box: = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 7)
 	bottom.add_child(box)
-	var row := HBoxContainer.new()
+	var row: = HBoxContainer.new()
 	box.add_child(row)
-	var small := _label("阿晴的小日子",13,TEAL)
+	var small: = _label("阿晴的小日子", 13, TEAL)
 	small.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(small)
-	bond_label = _label("",12,MUTED)
+	bond_label = _label("", 12, MUTED)
 	row.add_child(bond_label)
-	status_label = _label("",20)
+	status_label = _label("", 20)
 	status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	box.add_child(status_label)
-	caption_label = _label("",12,MUTED)
+	caption_label = _label("", 12, MUTED)
 	caption_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	box.add_child(caption_label)
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation",8)
+	var actions: = HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
 	box.add_child(actions)
-	actions.add_child(_button("天气",func(): _open_sheet("weather")))
-	actions.add_child(_button("陪伴",func(): _open_sheet("care"),true))
-	actions.add_child(_button("日历",func(): _open_sheet("festivals")))
+	actions.add_child(_button("天气", func(): _open_sheet("weather")))
+	actions.add_child(_button("陪伴", func(): _open_sheet("care"), true))
+	actions.add_child(_button("日历", func(): _open_sheet("festivals")))
 	shade = ColorRect.new()
-	shade.color = Color(0.04,0.10,0.12,0.38)
+	shade.color = Color(0.04, 0.1, 0.12, 0.38)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.gui_input.connect(func(e):
+	shade.gui_input.connect( func(e):
 		if e is InputEventMouseButton and e.pressed: _close_sheet())
 	ui.add_child(shade)
 	shade.hide()
 	sheet = PanelContainer.new()
-	sheet.add_theme_stylebox_override("panel",_style(CREAM,26))
+	sheet.add_theme_stylebox_override("panel", _style(CREAM, 26))
 	ui.add_child(sheet)
 	sheet_scroll = ScrollContainer.new()
 	sheet_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	sheet.add_child(sheet_scroll)
 	sheet_content = VBoxContainer.new()
-	sheet_content.add_theme_constant_override("separation",12)
+	sheet_content.add_theme_constant_override("separation", 12)
 	sheet_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sheet_scroll.add_child(sheet_content)
 	sheet.hide()
 
-func _layout() -> void:
+func _layout() -> void :
 	if ui == null: return
-	var size := get_viewport_rect().size
+	var size: = get_viewport_rect().size
 	top.size = size
-	festival_label.size.x = size.x-60
-	clock_label.position = Vector2(size.x-180,34)
-	clock_label.size = Vector2(150,25)
+	festival_label.size.x = size.x - 60
+	clock_label.position = Vector2(size.x - 180, 34)
+	clock_label.size = Vector2(150, 25)
 	var button: Button = top.get_node("SettingsButton")
-	button.position = Vector2(size.x-104,82)
-	button.size = Vector2(76,42)
-	bottom.position = Vector2(18,size.y-179)
-	bottom.size = Vector2(size.x-36,163)
-	sheet.position = Vector2(12,size.y*0.38)
-	sheet.size = Vector2(size.x-24,size.y*0.62-12)
+	button.position = Vector2(size.x - 104, 82)
+	button.size = Vector2(76, 42)
+	bottom.position = Vector2(18, size.y - 179)
+	bottom.size = Vector2(size.x - 36, 163)
+	sheet.position = Vector2(12, size.y * 0.38)
+	sheet.size = Vector2(size.x - 24, size.y * 0.62 - 12)
 
-func _refresh_labels() -> void:
+func _refresh_labels() -> void :
 	if weather_label == null: return
 	var e: Dictionary = world.environment
 	var has_live: bool = mode == "live" and not live_data.is_empty()
@@ -393,35 +478,39 @@ func _refresh_labels() -> void:
 		for field in ["hour", "minute", "is_day", "phase"]: world.environment[field] = clock[field]
 	var valid: bool = mode == "demo" or has_live
 	weather_label.text = ("%d°" % roundi(e.temperature)) if valid else "--°"
-	details_label.text = ("%s  ·  体感 %d°  ·  风 %d km/h" % [e.title,roundi(e.feels),roundi(e.wind)]) if valid else "天气连接中，小院里先歇一会儿"
-	var time := Time.get_datetime_dict_from_system()
+	details_label.text = ("%s  ·  体感 %d°  ·  风 %d km/h" % [e.title, roundi(e.feels), roundi(e.wind)]) if valid else "天气连接中，小院里先歇一会儿"
+	var time: = Time.get_datetime_dict_from_system()
 	if has_live:
 		time = WeatherSource.clock_state(live_data)
-	clock_label.text = "%02d:%02d  ·  %s" % [time.hour,time.minute,"体验" if mode == "demo" else (location_title if use_location and location_plugin != null else Catalog.CITIES[city_index].name)]
+	location_label.text = _location_text()
+	clock_label.text = "%02d:%02d  ·  %s" % [time.hour,time.minute,"体验" if mode == "demo" else "实时"]
 	if mode == "demo":
 		source_label.text = "天气体验 · " + ("自动漫游中" if cinematic else "可以切换不同天气")
 	elif has_live:
-		var age: float = Time.get_unix_time_from_system()-float(live_data.saved_at)
-		var prefix := "过期缓存" if age>3600 else String(live_data.source)
-		source_label.text = "%s · %s 更新 · Open-Meteo" % [prefix,String(live_data.observed).replace("T"," ").substr(5,11)]
+		var age: float = Time.get_unix_time_from_system() - float(live_data.saved_at)
+		var prefix: = "过期缓存" if age > 3600 else String(live_data.source)
+		source_label.text = "%s · %s 更新 · Open-Meteo" % [prefix, String(live_data.observed).replace("T", " ").substr(5, 11)]
 	else: source_label.text = network_status
-	festival_label.text = ("节日体验 · " if festival_preview else "") + String(world.festival.get("title", ""))
-	var lunar := Calendar.lunar(_today())
-	calendar_label.text = _today() + "  ·  " + ("农历"+String(lunar.title) if not lunar.is_empty() else "农历数据待更新")
+	festival_label.text = (("日常体验 · " if world.festival.get("kind","")=="daily" else "节日体验 · ") if festival_preview else "") + String(world.festival.get("title", ""))
+	if fish != null: fish.set_context(_today(), int(time.hour), mode == "demo" or festival_preview or not preview_date.is_empty())
+	var lunar: = Calendar.lunar(_today())
+	calendar_label.text = _today() + "  ·  " + ("农历" + String(lunar.title) if not lunar.is_empty() else "农历数据待更新")
 	if not preview_date.is_empty(): calendar_label.text += " · 体验"
 	status_label.text = world.status
-	caption_label.text = world.festival.get("caption", e.caption)
+	caption_label.text = duet.caption if duet.active else world.festival.get("caption", e.caption)
 	bond_label.text = "陪伴 %d 次" % world.bond
 	if quiet_mode: caption_label.text = "轻轻点一下阿晴，打个招呼"
 
-func _on_live_weather(data: Dictionary) -> void:
+func _on_live_weather(data: Dictionary) -> void :
 	if mode != "live": return
+	if String(data.id) != String(world.environment.id): duet.cancel(world,fish)
 	live_data = data
 	world.set_environment(data)
 	_refresh_labels()
 	_save()
 
-func set_demo(id: String, stop_tour := true) -> void:
+func set_demo(id: String, stop_tour: = true) -> void :
+	duet.cancel(world,fish)
 	festival_preview = false
 	preview_date = ""
 	program_key = ""
@@ -433,7 +522,8 @@ func set_demo(id: String, stop_tour := true) -> void:
 	_refresh_labels()
 	_save()
 
-func _use_live() -> void:
+func _use_live() -> void :
+	duet.cancel(world,fish)
 	festival_preview = false
 	preview_date = ""
 	program_key = ""
@@ -443,9 +533,12 @@ func _use_live() -> void:
 	live_data = {}
 	world.set_environment(Catalog.preset("clear"))
 	world.environment.caption = "天气更新中，先陪你安静待一会儿。"
+	location_names.cancel()
+	location_name_pending = false
+	location_city = ""
+	location_state = "waiting" if use_location and location_plugin != null else "unavailable" if use_location else "manual"
 	if use_location and location_plugin != null:
 		source.stop()
-		location_title = "正在定位…"
 		network_status = "正在获取位置 · 也可在设置中选择城市"
 		location_plugin.call("request_location")
 	else:
@@ -453,31 +546,81 @@ func _use_live() -> void:
 	_close_sheet()
 	_refresh_labels()
 
-func _on_location(json: String) -> void:
+func _location_text() -> String:
+	var selected: String = Catalog.CITIES[city_index].name
+	if mode == "demo": return "体验场景 · 不是当前位置"
+	if not use_location: return "城市天气 · " + selected
+	if location_state == "failed": return "定位未成功 · 暂用" + selected
+	if location_state == "unavailable": return "定位不可用 · 暂用" + selected
+	if location_state == "waiting": return "自动定位 · 定位中…"
+	if not location_city.is_empty(): return "自动定位 · " + location_city
+	var name := String(live_data.get("city",""))
+	if not name.is_empty() and name != "当前位置": return "自动定位 · " + name
+	return "已获取位置 · 地名解析中…" if location_name_pending else "已定位 · 暂无城市名"
+
+func _on_location(json: String) -> void :
 	if mode != "live" or not use_location: return
 	var coordinates = JSON.parse_string(json)
 	if coordinates is Dictionary and coordinates.has("lat") and coordinates.has("lon"):
-		location_title = "%.3f°, %.3f°" % [float(coordinates.lat),float(coordinates.lon)]
-		source.fetch_coordinates(float(coordinates.lat),float(coordinates.lon))
+		if typeof(coordinates.lat) not in [TYPE_INT,TYPE_FLOAT] or typeof(coordinates.lon) not in [TYPE_INT,TYPE_FLOAT]:
+			_on_location_error("位置数据无效"); return
+		var lat := float(coordinates.lat)
+		var lon := float(coordinates.lon)
+		if not is_finite(lat) or not is_finite(lon) or absf(lat)>90 or absf(lon)>180:
+			_on_location_error("位置数据无效"); return
+		location_state = "located"
+		location_name_pending = location_city.is_empty()
+		location_name_elapsed = 0
+		network_status = "已定位 · 获取天气中"
 		_refresh_labels()
+		source.fetch_coordinates(lat,lon)
+		if location_city.is_empty(): location_names.request_name(lat,lon)
+		if not location_city.is_empty() and source.has_method("rename_current_city"):
+			source.rename_current_city(location_city)
+	else: _on_location_error("未获取到位置")
 
-func _close_sheet() -> void:
+func _on_location_name(city_name: String) -> void :
+	if mode != "live" or not use_location: return
+	var clean: = String(city_name).strip_edges()
+	if clean.is_empty() or location_state in ["failed","unavailable"]: return
+	location_city = clean
+	location_name_pending = false
+	if source.has_method("rename_current_city"): source.rename_current_city(clean)
+	_refresh_labels()
+
+func _on_resolved_name(name: String) -> void:
+	if mode != "live" or not use_location or location_state != "located": return
+	location_name_pending = false
+	if not name.is_empty(): _on_location_name(name)
+	_refresh_labels()
+
+func _on_location_error(message: String) -> void :
+	if mode != "live" or not use_location: return
+	location_state = "failed"
+	location_names.cancel()
+	location_name_pending = false
+	location_city = ""
+	network_status = String(message)
+	source.fetch(city_index)
+	_refresh_labels()
+
+func _close_sheet() -> void :
 	opened_sheet = ""
 	sheet.hide()
 	shade.hide()
 
-func _heading(title: String, subtitle: String) -> void:
-	var row := HBoxContainer.new()
-	var label := _label(title,24)
+func _heading(title: String, subtitle: String) -> void :
+	var row: = HBoxContainer.new()
+	var label: = _label(title, 24)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(label)
-	row.add_child(_button("收起",_close_sheet))
+	row.add_child(_button("收起", _close_sheet))
 	sheet_content.add_child(row)
-	var sub := _label(subtitle,13,MUTED)
+	var sub: = _label(subtitle, 13, MUTED)
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sheet_content.add_child(sub)
 
-func _open_sheet(kind: String) -> void:
+func _open_sheet(kind: String) -> void :
 	opened_sheet = kind
 	for child in sheet_content.get_children():
 		sheet_content.remove_child(child)
@@ -490,240 +633,293 @@ func _open_sheet(kind: String) -> void:
 			_update_panel()
 		"festivals":
 			_heading("今天与每一天", "全年每日主题，叠加农历、公历、节气和你的纪念日。")
-			var program := Events.program(event_source.catalog,_today(),anniversaries)
-			sheet_content.add_child(_label(String(program.daily_title),16,TEAL))
-			for event in program.matches: sheet_content.add_child(_label("今天 · "+String(event.title),16))
-			if program.matches.is_empty(): sheet_content.add_child(_label("今天没有额外节日，也有日常小节目。",14,MUTED))
-			var date_input := _field("YYYY-MM-DD",_today())
+			var program: = Events.program(event_source.catalog, _today(), anniversaries)
+			sheet_content.add_child(_label(String(program.daily_title), 16, TEAL))
+			for event in program.matches: sheet_content.add_child(_label("今天 · " + String(event.title), 16))
+			if program.matches.is_empty(): sheet_content.add_child(_label("今天没有额外节日，也有日常小节目。", 14, MUTED))
+			var date_input: = _field("YYYY-MM-DD", _today())
 			sheet_content.add_child(date_input)
-			var error_label := _label("",13,Color("aa5143"))
+			var error_label: = _label("", 13, Color("aa5143"))
 			sheet_content.add_child(error_label)
-			sheet_content.add_child(_button("看看这一天",func():
+			sheet_content.add_child(_button("看看这一天", func():
 				if Events._valid_date(date_input.text): _preview_date(date_input.text)
 				else: error_label.text = "请输入有效公历日期，例如 2026-10-01"))
-			sheet_content.add_child(_button("我的纪念日",func(): _open_sheet("anniversaries")))
-			sheet_content.add_child(_button("200 种特效图鉴",func(): _open_sheet("effect_library")))
-			sheet_content.add_child(_button("节日与节气目录",func(): _open_sheet("festival_library")))
-			sheet_content.add_child(_button("回到今天 · 真实天气",_use_live,true))
-			sheet_content.add_child(_label(event_source.status,12,MUTED))
+			sheet_content.add_child(_button("我的纪念日", func(): _open_sheet("anniversaries")))
+			sheet_content.add_child(_button("200 种特效图鉴", func(): _open_sheet("effect_library")))
+			sheet_content.add_child(_button("大肥鱼 · 动作图鉴与今日节目", func(): _open_sheet("fish_library")))
+			sheet_content.add_child(_button("节日与节气目录", func(): _open_sheet("festival_library")))
+			sheet_content.add_child(_button("回到今天 · 真实天气", _use_live, true))
+			sheet_content.add_child(_label(event_source.status, 12, MUTED))
 		"festival_library":
 			_heading("节日、节气与纪念日", "自动使用真实日期；这里可以提前看看。纪念日采用安静的演出。")
 			for event in event_source.catalog.events:
 				var chosen: Dictionary = event
-				sheet_content.add_child(_button(String(event.title),func(): _preview_festival(chosen)))
+				sheet_content.add_child(_button(String(event.title), func(): _preview_festival(chosen)))
+		"fish_library":
+			_fish_library()
 		"anniversaries":
 			_anniversary_form()
 		"effect_library":
-			_heading("特效图鉴 · %d / 10" % (effect_page+1), "20 类图形 × 10 种运动编排，共 200 套程序特效；不是 200 段角色动画。")
-			var nav := HBoxContainer.new()
+			_heading("特效图鉴 · %d / 10" % (effect_page + 1), "20 类图形 × 10 种运动编排，共 200 套程序特效；不是 200 段角色动画。")
+			var nav: = HBoxContainer.new()
 			sheet_content.add_child(nav)
-			nav.add_child(_button("上一页",func(): effect_page=posmod(effect_page-1,10); _open_sheet("effect_library")))
-			nav.add_child(_button("下一页",func(): effect_page=(effect_page+1)%10; _open_sheet("effect_library")))
+			nav.add_child(_button("上一页", func(): effect_page = posmod(effect_page - 1, 10);_open_sheet("effect_library")))
+			nav.add_child(_button("下一页", func(): effect_page = (effect_page + 1) % 10;_open_sheet("effect_library")))
 			Calendar.ensure_loaded()
-			for i in range(effect_page*20,(effect_page+1)*20):
+			for i in range(effect_page * 20, (effect_page + 1) * 20):
 				var id: String = Calendar.effect_order[i]
-				sheet_content.add_child(_button(String(Calendar.effect(id).title),func():
+				sheet_content.add_child(_button(String(Calendar.effect(id).title), func():
 					_preview_date(_today())
 					calendar_effects.override_id = id
 					festival_preview = true
-					world.set_festival({"id":"effect_preview","title":Calendar.effect(id).title,"caption":"特效体验 · 回到今天即可恢复自动场景","actions":["idle"],"tone":"gentle"})
+					world.set_festival({"id": "effect_preview", "title": Calendar.effect(id).title, "caption": "特效体验 · 回到今天即可恢复自动场景", "actions": ["idle"], "tone": "gentle"})
 					_refresh_labels()))
 		"weather":
-			_heading("小院的每一种天气","让阿晴陪你看看，不一样的天空。")
-			var grid := GridContainer.new()
+			_heading("小院的每一种天气", "让阿晴陪你看看，不一样的天空。")
+			var grid: = GridContainer.new()
 			grid.columns = 4
-			grid.add_theme_constant_override("h_separation",7)
-			grid.add_theme_constant_override("v_separation",8)
+			grid.add_theme_constant_override("h_separation", 7)
+			grid.add_theme_constant_override("v_separation", 8)
 			sheet_content.add_child(grid)
 			for id in Catalog.IDS:
 				var chosen: String = id
 				var active: bool = mode == "demo" and world.environment.id == id
-				grid.add_child(_button(Catalog.preset(id).title,func(): set_demo(chosen); _close_sheet(),active))
-			sheet_content.add_child(_button("自动漫游  ·  依次看遍 16 种场景",func(): cinematic=true; cinematic_time=0; cinematic_index=-1; _close_sheet()))
-			sheet_content.add_child(_button("回到真实天气",_use_live,true))
+				grid.add_child(_button(Catalog.preset(id).title, func(): set_demo(chosen);_close_sheet(), active))
+			sheet_content.add_child(_button("自动漫游  ·  依次看遍 16 种场景", func(): cinematic = true;cinematic_time = 0;cinematic_index = -1;_close_sheet()))
+			sheet_content.add_child(_button("回到真实天气", _use_live, true))
 		"care":
-			_heading("陪阿晴待一会儿","一杯热饮，一次摸头，都是今天的小事。")
-			sheet_content.add_child(_button("陪伴日记",func(): _open_sheet("journal")))
+			_heading("陪阿晴待一会儿", "一杯热饮，一次摸头，都是今天的小事。")
+			sheet_content.add_child(_button("陪伴日记", func(): _open_sheet("journal")))
 			if quiet_mode:
-				sheet_content.add_child(_button("返回正常视图",func(): quiet_mode=false; top.show(); _close_sheet()))
-			var entries := [["摸摸头","pet"],["打个招呼","wave"],["一起喝热饮","drink"],["休息一会儿","sleep"],["看看小植物","water"]]
+				sheet_content.add_child(_button("返回正常视图", func(): quiet_mode = false;top.show();_close_sheet()))
+			var entries: = [["摸摸头", "pet"], ["打个招呼", "wave"], ["一起喝热饮", "drink"], ["休息一会儿", "sleep"], ["看看小植物", "water"]]
 			for pair in entries:
 				var action: String = pair[1]
-				sheet_content.add_child(_button(pair[0],func(): _care(action); _close_sheet()))
-			sheet_content.add_child(_label("精力 %d / 100     心情 %d / 100" % [world.energy,world.joy],14,TEAL))
+				sheet_content.add_child(_button(pair[0], func(): _care(action);_close_sheet()))
+			sheet_content.add_child(_button("大肥鱼 · 动作图鉴与今日节目", func(): _open_sheet("fish_library")))
+			sheet_content.add_child(_label("精力 %d / 100     心情 %d / 100" % [world.energy, world.joy], 14, TEAL))
 		"journal":
-			_heading("一起的小日子","已经一起遇见 %d / 16 种天气与时刻。" % world.discovered.size())
-			if world.journal.is_empty(): sheet_content.add_child(_label("今天会留下第一件小事。",16,MUTED))
+			_heading("一起的小日子", "已经一起遇见 %d / 16 种天气与时刻。" % world.discovered.size())
+			if world.journal.is_empty(): sheet_content.add_child(_label("今天会留下第一件小事。", 16, MUTED))
 			for entry in world.journal:
 				if not entry is Dictionary or not entry.has("text"): continue
-				var p := PanelContainer.new()
-				p.add_theme_stylebox_override("panel",_style(Color("f0eee6"),12))
-				var v := VBoxContainer.new()
+				var p: = PanelContainer.new()
+				p.add_theme_stylebox_override("panel", _style(Color("f0eee6"), 12))
+				var v: = VBoxContainer.new()
 				p.add_child(v)
-				v.add_child(_label(String(entry.get("time","")),12,MUTED))
-				var l := _label(String(entry.text),16)
+				v.add_child(_label(String(entry.get("time", "")), 12, MUTED))
+				var l: = _label(String(entry.text), 16)
 				l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				v.add_child(l)
 				sheet_content.add_child(p)
 		"settings":
-			_heading("小院设置","选择城市，阿晴就会感受那里的天气。")
+			_heading("小院设置", "选择城市，阿晴就会感受那里的天气。")
 			if location_plugin != null:
-				if use_location: sheet_content.add_child(_label("自动定位 · " + location_title,14,MUTED))
-				sheet_content.add_child(_button("使用当前位置",func(): use_location=true; _save(); _use_live(),use_location))
-			var grid := GridContainer.new()
+				sheet_content.add_child(_button("使用当前位置", func(): use_location = true;_save();_use_live(), use_location))
+			var grid: = GridContainer.new()
 			grid.columns = 4
-			grid.add_theme_constant_override("h_separation",7)
-			grid.add_theme_constant_override("v_separation",8)
+			grid.add_theme_constant_override("h_separation", 7)
+			grid.add_theme_constant_override("v_separation", 8)
 			sheet_content.add_child(grid)
 			for i in range(Catalog.CITIES.size()):
-				var index := i
-				grid.add_child(_button(Catalog.CITIES[i].name,func(): city_index=index; use_location=false; _save(); _use_live(),i==city_index and not use_location))
-			sheet_content.add_child(_button("应用更新 · OTA",func(): _open_sheet("updates")))
-			sheet_content.add_child(_button("刷新真实天气",_use_live,true))
-			sheet_content.add_child(_button("减少动态效果："+("开" if reduced_motion else "关"),func(): reduced_motion=not reduced_motion; _save(); _open_sheet("settings")))
-			sheet_content.add_child(_button("安静观赏："+("开" if quiet_mode else "关"),func(): quiet_mode=not quiet_mode; _close_sheet(); top.visible=not quiet_mode))
-			var info := _label("小院天气 1.2 · 阿晴\n天气来自 Open-Meteo，每 15 分钟更新。\n昼夜跟随当地时间与日出日落。\n可使用当前位置，也可手动选择城市。\n体验场景使用示例数据；陪伴记录保存在本机。",12,MUTED)
+				var index: = i
+				grid.add_child(_button(Catalog.CITIES[i].name, func(): city_index = index;use_location = false;_save();_use_live(), i == city_index and not use_location))
+			sheet_content.add_child(_button("大肥鱼邻居：" + ("住在小院" if fish_enabled else "回池塘了"), func(): fish_enabled = not fish_enabled;_save();_apply_fish();_open_sheet("settings")))
+			sheet_content.add_child(_button("应用更新 · OTA", func(): _open_sheet("updates")))
+			sheet_content.add_child(_button("刷新真实天气", _use_live, true))
+			sheet_content.add_child(_button("背景动态：" + ("自动" if ambience_enabled else "关"), func(): ambience_enabled = not ambience_enabled;_save();_open_sheet("settings")))
+			sheet_content.add_child(_button("减少动态效果：" + ("开" if reduced_motion else "关"), func(): reduced_motion = not reduced_motion;_save();_open_sheet("settings")))
+			sheet_content.add_child(_button("安静观赏：" + ("开" if quiet_mode else "关"), func(): quiet_mode = not quiet_mode;_close_sheet();top.visible = not quiet_mode))
+			var info: = _label("小院天气 1.4.1（211）· 阿晴和大肥鱼\n天气来自 Open-Meteo，每 15 分钟更新。\n昼夜跟随当地时间与日出日落。\n可使用当前位置，也可手动选择城市。\n体验场景使用示例数据；陪伴记录保存在本机。\n阿晴和大肥鱼每天都会见面，互相回应和分享点心。"\
+			, 12, MUTED)
 			info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			sheet_content.add_child(info)
 	_layout()
 
-func _on_update_state(json: String) -> void:
+func _on_update_state(json: String) -> void :
 	var data = JSON.parse_string(json)
 	if not data is Dictionary: return
 	var previous: String = update_data.get("state", "")
 	update_data = data
 	if opened_sheet == "updates":
-		if data.get("state")==previous and is_instance_valid(update_text):
+		if data.get("state") == previous and is_instance_valid(update_text):
 			update_text.text = String(data.get("message", ""))
 		else: _open_sheet("updates")
 
-func _update_panel() -> void:
+func _update_panel() -> void :
 	_heading("应用更新", "节日日历可以单独更新；新版应用需你确认下载和安装。")
-	var installed := {"name":"1.2.0","code":102}
+	var installed: = {"name": "1.4.1", "code": 211}
 	if updater != null:
 		var actual = JSON.parse_string(updater.call("installed_version"))
 		if actual is Dictionary: installed = actual
-	sheet_content.add_child(_label("当前版本："+String(installed.get("name","未知")),16,TEAL))
-	update_text = _label(String(update_data.get("message","点击检查更新。下载失败不会影响当前版本。")),14)
+	sheet_content.add_child(_label("当前版本：" + String(installed.get("name", "未知")), 16, TEAL))
+	update_text = _label(String(update_data.get("message", "点击检查更新。下载失败不会影响当前版本。")), 14)
 	update_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sheet_content.add_child(update_text)
 	if updater == null:
-		sheet_content.add_child(_label("请在 Android 安装包中使用 OTA。",14,MUTED))
+		sheet_content.add_child(_label("请在 Android 安装包中使用 OTA。", 14, MUTED))
 		return
 	var state: String = update_data.get("state", "idle")
 	if state == "available":
-		var notes := _label(String(update_data.get("notes","")),14,MUTED)
+		var notes: = _label(String(update_data.get("notes", "")), 14, MUTED)
 		notes.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sheet_content.add_child(notes)
-		sheet_content.add_child(_button("下载更新 · %.1f MB" % (float(update_data.get("bytes",0))/1048576.0),func(): updater.call("download_update"),true))
-	elif state in ["ready","permission","installer"]:
-		sheet_content.add_child(_button("继续安装" if state!="ready" else "安装更新",func(): updater.call("install_update"),true))
-	elif state in ["checking","downloading"]:
-		sheet_content.add_child(_button("取消",func(): updater.call("cancel_update")))
-	if state not in ["checking","downloading"]:
-		sheet_content.add_child(_button("检查更新",func(): updater.call("check_update",update_url)))
+		sheet_content.add_child(_button("下载更新 · %.1f MB" % (float(update_data.get("bytes", 0)) / 1048576.0), func(): updater.call("download_update"), true))
+	elif state in ["ready", "permission", "installer"]:
+		sheet_content.add_child(_button("继续安装" if state != "ready" else "安装更新", func(): updater.call("install_update"), true))
+	elif state in ["checking", "downloading"]:
+		sheet_content.add_child(_button("取消", func(): updater.call("cancel_update")))
+	if state not in ["checking", "downloading"]:
+		if update_url.is_empty(): sheet_content.add_child(_label("更新服务暂不可用",14,MUTED))
+		else: sheet_content.add_child(_button("检查更新", func(): updater.call("check_update", update_url)))
 
-func _field(placeholder: String, initial := "") -> LineEdit:
-	var field := LineEdit.new()
+func _field(placeholder: String, initial: = "") -> LineEdit:
+	var field: = LineEdit.new()
 	field.placeholder_text = placeholder
 	field.text = initial
 	field.custom_minimum_size.y = 44
-	field.add_theme_font_override("font",font)
-	field.add_theme_font_size_override("font_size",16)
+	field.add_theme_font_override("font", font)
+	field.add_theme_font_size_override("font_size", 16)
 	return field
 
-func _anniversary_form() -> void:
+func _anniversary_form() -> void :
 	_heading("我的纪念日", "只保存在手机上。支持公历、农历每年重复，以及指定日期；不上传私人日期。")
 	for event in anniversaries:
 		var chosen: String = event.id
-		var rule: String = "农历 "+String(event.lunar_day) if event.has("lunar_day") else String(event.get("month_day",event.get("date","")))
-		sheet_content.add_child(_label(String(event.title)+" · "+rule,16))
-		sheet_content.add_child(_button("删除这一条",func():
-			anniversaries = anniversaries.filter(func(e): return e.id!=chosen)
-			program_key=""; _save(); _update_festival(); _open_sheet("anniversaries")))
-	var name_field := _field("名称，例如生日、结婚纪念日")
+		var rule: String = "农历 " + String(event.lunar_day) if event.has("lunar_day") else String(event.get("month_day", event.get("date", "")))
+		sheet_content.add_child(_label(String(event.title) + " · " + rule, 16))
+		sheet_content.add_child(_button("删除这一条", func():
+			anniversaries = anniversaries.filter( func(e): return e.id != chosen)
+			program_key = "";_save();_update_festival();_open_sheet("anniversaries")))
+	var name_field: = _field("名称，例如生日、结婚纪念日")
 	name_field.max_length = 24
 	sheet_content.add_child(name_field)
-	var calendar_choice := OptionButton.new()
-	calendar_choice.add_theme_font_override("font",font)
-	calendar_choice.add_theme_font_size_override("font_size",16)
+	var calendar_choice: = OptionButton.new()
+	calendar_choice.add_theme_font_override("font", font)
+	calendar_choice.add_theme_font_size_override("font_size", 16)
 	calendar_choice.custom_minimum_size.y = 44
-	for choice in ["公历 · 每年重复（MM-DD）","农历 · 每年正月/普通月（MM-DD）","公历 · 指定日期（YYYY-MM-DD）","农历 · 只在闰月（MM-DD）"]: calendar_choice.add_item(choice)
+	for choice in ["公历 · 每年重复（MM-DD）", "农历 · 每年正月/普通月（MM-DD）", "公历 · 指定日期（YYYY-MM-DD）", "农历 · 只在闰月（MM-DD）"]: calendar_choice.add_item(choice)
 	sheet_content.add_child(calendar_choice)
-	var date_field := _field("例如 08-15 或 2026-10-01")
+	var date_field: = _field("例如 08-15 或 2026-10-01")
 	sheet_content.add_child(date_field)
-	var tone_choice := OptionButton.new()
-	tone_choice.add_theme_font_override("font",font)
+	var tone_choice: = OptionButton.new()
+	tone_choice.add_theme_font_override("font", font)
 	tone_choice.custom_minimum_size.y = 44
-	for choice in ["温暖庆祝","安静纪念"]: tone_choice.add_item(choice)
+	for choice in ["温暖庆祝", "安静纪念"]: tone_choice.add_item(choice)
 	sheet_content.add_child(tone_choice)
-	var error_label := _label("",13,Color("aa5143"))
+	var error_label: = _label("", 13, Color("aa5143"))
 	sheet_content.add_child(error_label)
-	sheet_content.add_child(_button("保存纪念日",func():
-		if anniversaries.size()>=64: error_label.text="最多保存 64 个个人纪念日"; return
-		var event := {"id":"personal_"+str(Time.get_ticks_usec()),"title":name_field.text.strip_edges(),"caption":"这一天，阿晴也记得。","kind":"anniversary","days":1,"priority":100,"tone":"solemn" if tone_choice.selected==1 else "joyful","actions":["idle"] if tone_choice.selected==1 else ["celebrate_wave","celebrate_cheer"],"effect":"candle_garland" if tone_choice.selected==1 else "heart_garland"}
-		var key: String = "date" if calendar_choice.selected==2 else ("lunar_day" if calendar_choice.selected in [1,3] else "month_day")
+	sheet_content.add_child(_button("保存纪念日", func():
+		if anniversaries.size() >= 64: error_label.text = "最多保存 64 个个人纪念日";return
+		var event: = {"id": "personal_" + str(Time.get_ticks_usec()), "title": name_field.text.strip_edges(), "caption": "这一天，阿晴也记得。", "kind": "anniversary", "days": 1, "priority": 100, "tone": "solemn" if tone_choice.selected == 1 else "joyful", "actions": ["idle"] if tone_choice.selected == 1 else ["celebrate_wave", "celebrate_cheer"], "effect": "candle_garland" if tone_choice.selected == 1 else "heart_garland"}
+		var key: String = "date" if calendar_choice.selected == 2 else ("lunar_day" if calendar_choice.selected in [1, 3] else "month_day")
 		event[key] = date_field.text.strip_edges()
-		if calendar_choice.selected==3: event.leap_month=true
-		if not Events.valid_event(event): error_label.text="请填写名称和有效日期；农历日期最大三十"; return
+		if calendar_choice.selected == 3: event.leap_month = true
+		if not Events.valid_event(event): error_label.text = "请填写名称和有效日期；农历日期最大三十";return
 		anniversaries.append(event)
-		program_key=""; _save(); _update_festival(); _open_sheet("anniversaries"),true))
+		program_key = "";_save();_update_festival();_open_sheet("anniversaries"), true))
 
-func _care(kind: String) -> void:
-	if world.interact(kind): effects.affection(); _save()
+func _care(kind: String) -> void :
+	duet.cancel(world,fish)
+	if world.interact(kind):
+		if world.festival.get("tone", "") != "solemn": effects.affection()
+		_save()
+		if kind in ["pet","wave"]: duet.touch(world,fish,"actor")
 	_refresh_labels()
 
-func _unhandled_input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void :
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE:
 			if sheet.visible: _close_sheet()
-			elif quiet_mode: quiet_mode=false; top.show()
+			elif quiet_mode: quiet_mode = false;top.show()
 			return
 		if event.keycode == KEY_SPACE: _care("pet")
 		if event.keycode == KEY_RIGHT:
 			var index: int = Catalog.IDS.find(world.environment.id)
-			set_demo(Catalog.IDS[(index+1)%Catalog.IDS.size()])
+			set_demo(Catalog.IDS[(index + 1) % Catalog.IDS.size()])
 		if event.keycode == KEY_LEFT:
 			var index: int = Catalog.IDS.find(world.environment.id)
-			set_demo(Catalog.IDS[posmod(index-1,Catalog.IDS.size())])
+			set_demo(Catalog.IDS[posmod(index - 1, Catalog.IDS.size())])
 		if event.keycode == KEY_D: _open_sheet("weather")
 	if sheet.visible: return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			touch_start = event.position
-			touch_time = Time.get_ticks_msec()/1000.0
+			touch_time = Time.get_ticks_msec() / 1000.0
 			touching = true
 		elif touching:
 			touching = false
 			if actor.current_rect.has_point(touch_start):
-				_care("pet" if Time.get_ticks_msec()/1000.0-touch_time > 0.35 or touch_start.y < actor.foot.y-actor.body_height*0.60 else "wave")
-			elif event.position.y > get_viewport_rect().size.y*0.65:
+				_care("pet" if Time.get_ticks_msec() / 1000.0 - touch_time > 0.35 or touch_start.y < actor.foot.y - actor.body_height * 0.6 else "wave")
+			elif fish != null and fish.has_point(event.position):
+				duet.cancel(world,fish)
+				if fish.pet_fish():
+					duet.touch(world,fish,"fish")
+					if world.festival.get("tone", "") != "solemn": effects.affection()
+					_save()
+				_refresh_labels()
+			elif event.position.y > get_viewport_rect().size.y * 0.65:
 				if not Catalog.is_rain(String(world.environment.id)):
-					world.target_x=clampf(event.position.x/get_viewport_rect().size.x,0.35,0.72)
-					world.direction=signf(world.target_x-world.x)
+					world.target_x = clampf(event.position.x / get_viewport_rect().size.x, 0.35, 0.72)
+					world.direction = signf(world.target_x - world.x)
 					world.queue.clear()
-					world.start("walk",12)
+					world.start("walk", 12)
 
-func _run_capture() -> void:
+func _run_capture() -> void :
 	await get_tree().create_timer(0.7).timeout
-	var path := "user://companion_shots"
+	var path: = "user://companion_shots"
 	DirAccess.make_dir_recursive_absolute(path)
 	for id in Catalog.IDS:
 		set_demo(id)
 		world.queue.clear()
 		world.choose_activity()
-		if id == "clear": world.start("idle",20)
+		if id == "clear": world.start("idle", 20)
 		await get_tree().create_timer(2.0).timeout
 		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png(path+"/"+id+".png")
-		print("SHOT ",id)
+		get_viewport().get_texture().get_image().save_png(path + "/" + id + ".png")
+		print("SHOT ", id)
 	_preview_festival(event_source.catalog.events[0])
 	await get_tree().create_timer(2.0).timeout
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png(path+"/national_day.png")
+	get_viewport().get_texture().get_image().save_png(path + "/national_day.png")
 	_open_sheet("festivals")
 	await get_tree().create_timer(0.3).timeout
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png(path+"/festival_menu.png")
-	print("COMPANION_CAPTURE_DONE ",ProjectSettings.globalize_path(path))
+	get_viewport().get_texture().get_image().save_png(path + "/festival_menu.png")
+	print("COMPANION_CAPTURE_DONE ", ProjectSettings.globalize_path(path))
 	get_tree().quit()
+
+
+func _fish_wave_back() -> void:
+	if world == null or fish == null: return
+	duet.start(world,fish)
+
+func _fish_library() -> void:
+	var names: Array = fish.anim_info.keys()
+	_heading("大肥鱼 · %d 个完整动作" % names.size(), "每天按时段与节日相伴。可以提前点播舞狮、月饼、粽子等动作。")
+	sheet_content.add_child(_button("播放当前日期的双人节目", func(): duet.cancel(world,fish);fish.request_show(true);_close_sheet(), true))
+	sheet_content.add_child(_button("回到今天 · 真实天气", _use_live))
+	var nav := HBoxContainer.new()
+	sheet_content.add_child(nav)
+	var pages: int = maxi(1, ceili(names.size()/12.0))
+	nav.add_child(_button("上一页", func(): fish_page = posmod(fish_page-1,pages);_open_sheet("fish_library")))
+	nav.add_child(_label("%d / %d" % [fish_page+1,pages],14))
+	nav.add_child(_button("下一页", func(): fish_page = (fish_page+1)%pages;_open_sheet("fish_library")))
+	for i in range(fish_page*12,mini(names.size(),(fish_page+1)*12)):
+		var id: String = names[i]
+		var label: String = String(fish.anim_info[id].get("label",id))
+		sheet_content.add_child(_button(label, func():
+			duet.cancel(world,fish)
+			set_demo("clear")
+			festival_preview = true
+			world.set_festival({"id":"fish_preview","title":"动作体验 · "+label,"caption":"回到今天可恢复日常节目","kind":"daily","tone":"gentle","actions":["idle"]})
+			_refresh_labels()
+			fish.preview_action(id)
+			fish.steps = [{"id":id,"duration":float(fish.anim_info[id].get("duration",2.0))}]
+			duet.start(world,fish,false)
+			_close_sheet()))
+
+func _apply_fish() -> void :
+	if not fish_enabled: duet.cancel(world,fish)
+	if fish != null: fish.enabled = fish_enabled
+	_refresh_labels()

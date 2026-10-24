@@ -1,0 +1,36 @@
+extends SceneTree
+const Ambience = preload("res://companion/ambience.gd")
+var failures: Array[String] = []
+func expect(ok: bool, message: String) -> void:
+	if not ok: failures.append(message)
+func _init() -> void: call_deferred("run")
+func run() -> void:
+	var canvas := Node2D.new();root.add_child(canvas)
+	var fx = Ambience.new()
+	var fps_before := Engine.max_fps
+	for i in range(60):fx.update(1.0/60,canvas,true,false,false,true,false)
+	expect(fx.active and canvas.material == fx.material,"enabled on daytime background")
+	expect(fx.update_count >= 14 and fx.update_count <= 16,"background updates capped at 15Hz")
+	var busy = Ambience.new()
+	for i in range(60):busy.update(1.0/60,canvas,true,false,false,true,true)
+	expect(busy.update_count >= 9 and busy.update_count <= 11,"interaction receives lower 10Hz background budget")
+	busy.update(0.016,canvas,true,true,false,true,true)
+	expect(not busy.active and canvas.material == null and busy.reason == "reduced_motion","reduced motion restores original material")
+	busy.update(0.016,canvas,true,false,true,true,false)
+	expect(not busy.active and busy.reason == "low_battery","low power disables effect")
+	busy.update(0.016,canvas,true,false,false,false,false)
+	expect(not busy.active and busy.reason == "weather","other backdrop textures stay untouched")
+	busy.update(0.016,canvas,false,false,false,true,false)
+	expect(not busy.active and busy.reason == "off","manual off")
+	var slow = Ambience.new()
+	for i in range(30):slow.update(0.04,canvas,true,false,false,true,true)
+	expect(not slow.active and slow.reason == "frame_budget","sustained slow frames suspend nonessential background")
+	for i in range(900):slow.update(1.0/60,canvas,true,false,false,true,false)
+	expect(slow.active,"automatic retry after cooling down")
+	var resumed = Ambience.new();resumed.update(1.0,canvas,true,false,false,true,false)
+	expect(resumed.active,"resume gap does not trigger slow-frame fallback")
+	expect(Engine.max_fps == fps_before,"never lower character engine frame rate")
+	canvas.queue_free();await process_frame
+	if failures.is_empty():push_warning("PASS test_ambience: bounded 15/10Hz, reduced/low-power/manual/weather guards, slow-frame fallback/recovery, engine FPS preserved")
+	for f in failures:push_error("FAIL "+f)
+	quit(0 if failures.is_empty() else 1)

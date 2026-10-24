@@ -26,6 +26,12 @@ var last_day := ""
 var festival: Dictionary = {}
 var festival_cooldown := 0.0
 var festival_index := 0
+var duet_active := false
+var look_direction := 0.0
+var duet_cue := ""
+var duet_time := 0.0
+var duet_prop := ""
+var duet_progress := 0.0
 
 func _init() -> void:
 	rng.randomize()
@@ -149,10 +155,10 @@ func step(delta: float) -> void:
 	puddle = clampf(puddle + dt * (0.045 if raining else -0.008), 0, 1)
 	energy = clampf(energy + dt * (0.30 if activity == "sleep" else -0.015), 0, 100)
 	joy = maxf(45, joy - dt * 0.002)
-	if activity == "walk":
+	if activity == "walk" and not duet_active:
 		x = move_toward(x, target_x, dt * 0.022)
 		if absf(x - target_x) < 0.003: start("idle", 4.0)
-	if activity_time >= activity_duration: next_action()
+	if activity_time >= activity_duration and not duet_active: next_action()
 	if environment.id == "thunderstorm":
 		thunder_in -= dt
 		if thunder_in <= 0:
