@@ -46,6 +46,16 @@ func fetch_coordinates(lat: float, lon: float) -> void:
 	custom_target = {"lat":lat,"lon":lon,"name":"当前位置"}
 	_fetch_target(custom_target,"location_%.2f_%.2f" % [lat,lon])
 
+func rename_current_city(city: String) -> void:
+	if custom_target.is_empty() or city.strip_edges().is_empty(): return
+	pending_name = city.strip_edges()
+	custom_target["name"] = pending_name
+	if not last_data.is_empty():
+		last_data["city"] = pending_name
+		if cache.get(pending_key) is Dictionary:
+			cache[pending_key]["city"] = pending_name
+		updated.emit(last_data)
+
 func _fetch_target(city: Dictionary, key: String) -> void:
 	enabled = true
 	pending_key = key

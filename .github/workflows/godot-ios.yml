@@ -1,0 +1,52 @@
+name: Shared courtyard iOS
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/weather-companion-handoff]
+    paths: ['godot_project/**', 'native/ios/**', 'tools/build_ios*.py', '.github/workflows/godot-ios.yml']
+permissions:
+  contents: read
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Godot and matching source/templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/ios-deps
+          curl --fail --retry 3 -L https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_macos.universal.zip -o .local/ios-deps/editor.zip
+          unzip -q .local/ios-deps/editor.zip -d .local/ios-deps
+          echo "GODOT_BIN=$PWD/.local/ios-deps/Godot.app/Contents/MacOS/Godot" >> "$GITHUB_ENV"
+          curl --fail --retry 3 -L https://codeload.github.com/godotengine/godot/tar.gz/refs/tags/4.4.1-stable -o .local/ios-deps/source.tgz
+          tar -xzf .local/ios-deps/source.tgz -C .local/ios-deps
+          curl --fail --retry 3 -L https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -o .local/ios-deps/templates.tpz
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          target = Path.home() / 'Library/Application Support/Godot/export_templates/4.4.1.stable'
+          target.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile('.local/ios-deps/templates.tpz') as archive:
+              (target / 'ios.zip').write_bytes(archive.read('templates/ios.zip'))
+          PY
+          python3 -m pip install scons==4.10.1
+      - name: Build native plugin
+        run: python3 tools/build_ios_plugin.py --godot-source .local/ios-deps/godot-4.4.1-stable
+      - name: Import and run shared regressions
+        run: |
+          "$GODOT_BIN" --headless --path godot_project --editor --import --quit
+          bash godot_project/run_tests.sh
+      - name: Build unsigned iOS app from shared Android scene
+        run: python3 tools/build_ios.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: courtyard-ios-1.4.3-213-unsigned
+          path: |
+            builds/ios/*-unsigned.ipa
+            builds/ios/build-report.json
+          retention-days: 14

@@ -73,6 +73,8 @@ def main():
     native.mkdir(parents=True, exist_ok=True)
     for kotlin in (PROJECT/"companion/android").glob("*.kt"):
         shutil.copy2(kotlin, native/kotlin.name)
+    for java_source in (PROJECT/"companion/android").glob("*.java"):
+        shutil.copy2(java_source, native/java_source.name)
     for name in (BUILD/"res").glob("values*/godot_project_name_string.xml"):
         name.write_text('<?xml version="1.0" encoding="utf-8"?><resources><string name="godot_project_name_string">小院天气</string></resources>')
     (BUILD/"res/drawable").mkdir(exist_ok=True)

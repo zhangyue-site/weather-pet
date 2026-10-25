@@ -1,0 +1,12 @@
+[config]
+name="CompanionIOS"
+binary="CompanionIOS.xcframework"
+initialization="init_companion_ios"
+deinitialization="deinit_companion_ios"
+
+[dependencies]
+system=["Foundation.framework", "UIKit.framework", "CoreLocation.framework"]
+linker_flags=["-ObjC"]
+
+[plist]
+NSLocationWhenInUseUsageDescription:string="获取所在城市的天气，让小院随当地天气和昼夜变化；也可以手动选择城市。"

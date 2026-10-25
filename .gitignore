@@ -24,3 +24,17 @@ out/
 # Separate server maintenance records are retained locally.
 docs/旧服务器恢复记录.md
 docs/服务器恢复验证.json
+
+# Private release configuration injected only in controlled packaging
+godot_project/companion/release.json
+
+# Reimport cache stamps; runtime frames and provenance remain versioned
+godot_project/companion/fish/*/source.sha256
+
+# Generated native iOS libraries and Apple signing material
+*.xcframework/
+*.mobileprovision
+*.p12
+*.ipa
+*.xcarchive/
+godot_project/ios/plugins/**/*.a

@@ -16,9 +16,12 @@ func affection() -> void:
 func _process(delta: float) -> void:
 	if world == null: return
 	var id: String = world.environment.id
-	for d in dots:
-		d.y = fmod(d.y + delta * (0.70 if Catalog.is_rain(id) else 0.055) * d.s, 1.0)
-		d.x = fposmod(d.x + delta * (0.15 if id == "windy" else 0.015) * d.s, 1.0)
+	# Hidden weather particles need no simulation work.
+	if visible and (Catalog.is_rain(id) or Catalog.is_snow(id) or id == "windy"):
+		for d in dots:
+			d.y = fmod(d.y + delta * (0.70 if Catalog.is_rain(id) else 0.055) * d.s, 1.0)
+			d.x = fposmod(d.x + delta * (0.15 if id == "windy" else 0.015) * d.s, 1.0)
+	if world.festival.get("tone", "") == "solemn": hearts.clear()
 	for h in hearts:
 		h.life += delta
 		h.y -= delta * 25

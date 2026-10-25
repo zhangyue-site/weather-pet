@@ -1,36 +1,50 @@
-# 小院天气 · 阿晴
+# 小院天气 · 阿晴和大肥鱼
 
-只维护一个 Android 工程、一个人形角色和一个交付 APK：`builds/WeatherCompanion.apk`。天气、昼夜、公历、农历、节日和个人纪念日共同决定进入应用后看到的内容。
+用真实天气、昼夜、节日和日常互动驱动的小院。Android 与 iOS 使用同一套 **Godot 4.4.1 场景与资源**：阿晴、大肥鱼、天气行为、全年日历、个人纪念日、双人互动、背景微动和减少动态设置共用源码。
 
-## 当前进度与后续工作
+## 运行
 
-完整状态、验证证据和按优先级排列的待办见 [开发交接](docs/handoff/weather-pet-main.md)。本分支保存 Godot「小院天气」成果；仓库默认分支 `flutter-rive-v3` 是另一条开发线，后续主线仍需结合实际体验确认。
-
-2026-10-21 六组 Godot 测试复验通过，线上 OTA 1.2.1 和日历内容可达。本地同版本 APK 与线上清单哈希不一致，需先核对来源；实体手机、正式签名及完整角色动画仍待完成。APK 不随源码提交。
-
-## 当前内容
-
-- 每年 365 天都有每日主题，另有 2 月 29 日，共 366 条每日内容。
-- 74 条节日、节气与纪念日规则；农历转换内置覆盖 2025–2036 年。2026 年逐日与香港天文台数据核对一致。
-- 200 套程序特效：20 种图形 × 10 种运动轨迹，可以在日历中的特效库查看。它们是画面特效，不是 200 套独立角色逐帧动画。
-- 可添加个人生日、农历生日（含闰月）、年度或一次性纪念日；哀思日使用克制的烛光效果，避免庆祝冲突。
-- 真实天气、定位或手选城市；下雨取伞、雨停收伞，以及冷、热、风、雪、昼夜和触摸互动。天气行为与日历画面共存。
-- 应用内 OTA：设置 → 应用更新。检查版本、主动下载、进度与取消、完整性及同签名验证、系统确认安装。已有数据随同包名更新保留。
-- 服务器下发日历规则和已有动作/特效组合；新增代码或美术资源通过 APK 更新。
-
-日历不是全球所有节日的全集；个人纪念日由用户添加。没有节日时仍有每日内容。离线可运行，联网失败继续使用已存日历。
-
-## 开发与交付
+使用 Godot 4.4.1 打开 `godot_project/project.godot`。主场景是 `companion/main.tscn`。首次运行可手选城市；天气暂不可用时可体验场景。大肥鱼按需解码，缓存最多40帧/24MiB，完整动作帧随本分支提供。
 
 ```bash
-bash godot_project/run_tests.sh
-/Applications/Godot.app/Contents/MacOS/Godot --path godot_project
-python3 godot_project/build_companion.py
-python3 tools/publish_release.py
+GODOT_BIN=/path/to/Godot bash godot_project/run_tests.sh
 ```
 
-工程入口 `godot_project/project.godot`，场景 `companion/main.tscn`。构建使用 Godot 4.4.1、JDK 17、Android SDK 和本机缓存 Gradle。包名 `com.weather.companion`，1.2.1（103），arm64，沿用本机调试签名；后续覆盖更新必须保留相同签名身份。
+## iOS 构建
 
-服务器已确认：124.222.88.195；腾讯云控制台到期时间为 **2029-08-07 14:04:42**。已复用新服务器上的有效证书恢复 HTTPS，OTA 与日历内容使用同一域名，详见 [服务器与 OTA](docs/服务器与OTA.md)。
+需要 macOS、Xcode、Python 3/SCons、官方 Godot 4.4.1 编辑器及 iOS 导出模板，以及同版本 Godot 源码。原生插件只提供 CoreLocation、城市区县解析和省电状态；画面与行为全部来自共享 Godot 场景。
 
-[每日内容清单](docs/calendar/每日内容.csv) · [200 特效目录](docs/calendar/特效目录.csv) · [内容下发协议](docs/服务器内容协议.md) · [历史版本清理记录](docs/清理记录.md)
+```bash
+python3 tools/build_ios_plugin.py --godot-source /path/to/godot-4.4.1-stable
+python3 tools/build_ios.py --godot /path/to/Godot
+# 模拟器版本
+python3 tools/build_ios.py --godot /path/to/Godot --simulator --output builds/ios-simulator
+```
+
+默认生成未签名 IPA。使用自己的证书和匹配的描述文件签名：
+
+```bash
+python3 tools/build_ios.py --identity 'Apple Distribution: ...' --profile /private/path/AppStore.mobileprovision
+```
+
+描述文件、私钥和签名证书不随源码分发。App Store 分发签名包需通过 App Store Connect/TestFlight 使用。包名沿用 `com.weatherpet.weatherPet`；自行分发时请修改 iOS 导出预设中的 bundle identifier。预设中的团队值只是未签名导出占位符。
+
+导出插件会把 `.gdignore` 下按需解码的 WebP 帧加入资源包；`tools/verify_pack.py` 会核对清单中所有帧、许可和哈希，缺帧直接阻止打包。不要只复制 GDScript 或绕过导出插件。
+
+## Android 构建
+
+现有构建入口是 `godot_project/build_companion.py`（Godot 4.4.1、JDK17、Android SDK 和 Gradle）。发布构建必须使用维护者自己的既有签名，不把调试包当作可覆盖正式包。`tools/build_interaction_test.py` 是历史固定APK补丁工具，并非公开源码构建的必要依赖。
+
+## 平台差异
+
+- Android：原生定位与 APK OTA。
+- iOS：仅使用应用期间定位，允许系统近似定位；拒绝权限或超时后手选城市。通过 App Store/TestFlight 更新，不下载安装 APK。
+- 两端：Open-Meteo 天气、日历、角色与双人互动、本地纪念日和陪伴记录、背景省电降级。
+
+无定位权限也能使用。定位坐标用于天气和系统地名查询，个人纪念日及陪伴记录保存在设备本地。场景体验使用示例天气，页面明确标记。
+
+## 开源与许可
+
+原创代码使用 [MIT](LICENSE)；大肥鱼 MIT、字体 OFL、农历生成依赖等许可见 [第三方说明](THIRD_PARTY_NOTICES.md)，应用设置内也可查看。天气数据来源 Open-Meteo。旧 Flutter/Rive 分支保留作历史参考，不参与当前构建。
+
+[跨端交接](docs/handoff/ios-android-alignment-audit.md) · [开发交接](docs/handoff/weather-pet-main.md) · [每日内容](docs/calendar/每日内容.csv)
