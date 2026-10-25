@@ -23,7 +23,7 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   ios:
@@ -60,6 +60,18 @@ jobs:
           name: weatherpet-ios-unsigned-${{ inputs.build_name }}-${{ inputs.build_number }}
           path: weather_pet_app/build/weatherpet-ios-unsigned.ipa
           retention-days: 7
+      - name: Publish ipa to release (anonymous download channel)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="ios-${{ inputs.build_name }}-b${{ inputs.build_number }}"
+          cd build
+          gh release create "$TAG" weatherpet-ios-unsigned.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "iOS ${{ inputs.build_name }} (${{ inputs.build_number }}) unsigned" \
+            --notes "unsigned ipa for server-side signing" \
+          || gh release upload "$TAG" weatherpet-ios-unsigned.ipa \
+            --clobber --repo "$GITHUB_REPOSITORY"
 
   screenshots:
     runs-on: macos-15
