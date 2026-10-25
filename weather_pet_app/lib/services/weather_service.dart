@@ -29,11 +29,12 @@ class WeatherCache {
   }
 }
 
-/// 天气数据源: Open-Meteo (免 key, 非商用免费, 无每人额度)
+/// 天气数据源: 与安卓版同架构 —— 自家代理 zz /om/ 优先, Open-Meteo 直连兜底, 免 key
 /// 城市名: 系统地理编码 (iOS CLGeocoder / Android 系统 Geocoder), 免 key
 /// 原和风天气 key 已下线 (曾暴露于公开仓库, 建议在和风后台停用)
 class WeatherService {
-  static const String _baseUrl = 'https://api.open-meteo.com/v1/forecast';
+  static const String _proxyBase = 'https://zz.zhangyue.site/om/v1/forecast';
+  static const String _directBase = 'https://api.open-meteo.com/v1/forecast';
 
   /// 逆地理只查城市名(与天气接口独立, 失败返回 '未知')
   static Future<String> reverseCityName(double lon, double lat) async {
@@ -69,8 +70,32 @@ class WeatherService {
   }
 
   static Future<WeatherData> fetchWeather(double lon, double lat) async {
+    final current = await _tryFetch(_proxyBase, lon, lat) ??
+        await _tryFetch(_directBase, lon, lat);
+    if (current == null) return WeatherData();
+
+    final windKmh = double.tryParse('${current['wind_speed_10m']}') ?? 5.0;
+    var condition =
+        _mapWmoCode(int.tryParse('${current['weather_code']}') ?? 0);
+    // 晴天但风大 (>= 39km/h) 表现为大风
+    if (condition == 'clear' && windKmh >= 39) condition = 'windy';
+
+    final weather = WeatherData(
+      condition: condition,
+      temperature: double.tryParse('${current['temperature_2m']}') ?? 22.0,
+      humidity: double.tryParse('${current['relative_humidity_2m']}') ?? 50.0,
+      windSpeed: windKmh,
+      feelsLike: double.tryParse('${current['apparent_temperature']}') ?? 22.0,
+    );
+    await WeatherCache.save(weather);
+    return weather;
+  }
+
+  /// 请求单个数据源, 失败返回 null (走下一个源)
+  static Future<Map<String, dynamic>?> _tryFetch(
+      String base, double lon, double lat) async {
     try {
-      final url = '$_baseUrl?latitude=${lat.toStringAsFixed(4)}'
+      final url = '$base?latitude=${lat.toStringAsFixed(4)}'
           '&longitude=${lon.toStringAsFixed(4)}'
           '&current=temperature_2m,relative_humidity_2m,apparent_temperature,'
           'weather_code,wind_speed_10m'
@@ -78,29 +103,13 @@ class WeatherService {
       final response = await http
           .get(Uri.parse(url))
           .timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200) return WeatherData();
-
+      if (response.statusCode != 200) return null;
       final data = json.decode(response.body);
-      final now = data['current'];
-      if (now == null) return WeatherData();
-
-      final windKmh = double.tryParse('${now['wind_speed_10m']}') ?? 5.0;
-      var condition =
-          _mapWmoCode(int.tryParse('${now['weather_code']}') ?? 0);
-      // 晴天但风大 (>= 39km/h) 表现为大风
-      if (condition == 'clear' && windKmh >= 39) condition = 'windy';
-
-      final weather = WeatherData(
-        condition: condition,
-        temperature: double.tryParse('${now['temperature_2m']}') ?? 22.0,
-        humidity: double.tryParse('${now['relative_humidity_2m']}') ?? 50.0,
-        windSpeed: windKmh,
-        feelsLike: double.tryParse('${now['apparent_temperature']}') ?? 22.0,
-      );
-      await WeatherCache.save(weather);
-      return weather;
-    } catch (e) {
-      return WeatherData();
+      final current = data['current'];
+      if (current is! Map<String, dynamic>) return null;
+      return data;
+    } catch (_) {
+      return null;
     }
   }
 
