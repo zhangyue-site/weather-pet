@@ -28,7 +28,7 @@
 
 ## 构建交付
 
-- 源码：[5146cf6](https://github.com/zhangyue-site/weather-pet/commit/5146cf6950f6fdf2549c0ced03a7afd3a237c439)（后续提交仅补构建说明与验证记录）。
+- 源码：[5146cf6](https://github.com/zhangyue-site/weather-pet/commit/5146cf6950f6fdf2549c0ced03a7afd3a237c439)（后续提交仅补构建说明、资源UID与验证记录）。
 - 版本1.4.3，build213，bundle `com.weatherpet.weatherPet`，Apple分发签名。
 - IPA：235148149字节，SHA256 `cd69cf7c060c1ba5a8f0488e4a27290fdc5a3e36c767db109d53868c53227ac5`。
 - 真实签名证书SHA256 `64d558fd26467d195d1d71d9b9006b331665482419154519331b5b4f45d0e019`。
