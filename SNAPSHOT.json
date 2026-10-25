@@ -1,0 +1,10 @@
+{
+  "historical_android_211_snapshot": {
+    "git_tree": "905fab0457c50c5ddbc31c5cc4d3b7e360bd8184",
+    "apk_sha256": "f41001ba72926b46bb95144c91ecae66cbc0ddb5fc792de5b102b17a43bb3074",
+    "fish_frames_excluded": true,
+    "fish_source": "verified210 APK assets/companion/fish",
+    "private_release_json_excluded": true
+  },
+  "current_source": "Shared Godot Android/iOS scene with complete manifest animation frames; see README and cross-platform handoff."
+}
