@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--godot", default=os.environ.get("GODOT_BIN", "/Applications/Godot.app/Contents/MacOS/Godot"))
     parser.add_argument("--output", type=Path, default=ROOT / "builds/ios")
     parser.add_argument("--simulator", action="store_true")
+    parser.add_argument("--simulator-engine", type=Path, help="Matching Godot 4.4.1 arm64 simulator .a (required by recent Apple Silicon runtimes)")
     parser.add_argument("--template", type=Path, default=Path.home() / "Library/Application Support/Godot/export_templates/4.4.1.stable/ios.zip")
     parser.add_argument("--identity", default=os.environ.get("IOS_SIGN_IDENTITY"))
     parser.add_argument("--profile", type=Path, default=os.environ.get("IOS_PROVISIONING_PROFILE"))
@@ -69,10 +70,20 @@ def main():
         project_file = output / "Courtyard.xcodeproj/project.pbxproj"
         lines = project_file.read_text().splitlines()
         project_file.write_text("\n".join(line for line in lines if "/* MetalFX.framework in Frameworks */" not in line) + "\n")
+        if args.simulator_engine:
+            framework = output / "Courtyard.xcframework"
+            info_path = framework / "Info.plist"
+            framework_info = plistlib.loads(info_path.read_bytes())
+            for library in framework_info["AvailableLibraries"]:
+                if library.get("SupportedPlatformVariant") == "simulator":
+                    destination = framework / library["LibraryIdentifier"] / library["LibraryPath"]
+                    shutil.copy2(args.simulator_engine, destination)
+                    library["SupportedArchitectures"] = ["arm64"]
+            info_path.write_bytes(plistlib.dumps(framework_info))
     derived = output / "DerivedData"
     run(["xcodebuild", "-project", output / "Courtyard.xcodeproj", "-scheme", "Courtyard",
          "-configuration", "Release", "-sdk", sdk, "-derivedDataPath", derived,
-         "CODE_SIGNING_ALLOWED=NO", "ARCHS=x86_64" if args.simulator else "ARCHS=arm64", "ONLY_ACTIVE_ARCH=YES",
+         "CODE_SIGNING_ALLOWED=NO", "ARCHS=x86_64" if args.simulator and not args.simulator_engine else "ARCHS=arm64", "ONLY_ACTIVE_ARCH=YES",
          "COMPILER_INDEX_STORE_ENABLE=NO", "build"])
     app = derived / f"Build/Products/Release-{sdk}/Courtyard.app"
     if args.simulator:

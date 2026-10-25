@@ -21,6 +21,13 @@ python3 tools/build_ios.py --godot /path/to/Godot
 python3 tools/build_ios.py --godot /path/to/Godot --simulator --output builds/ios-simulator
 ```
 
+官方 Godot 4.4.1 模拟器模板只含 x86_64 库；新 Apple Silicon iOS runtime 需要 arm64。可用同版本源码构建测试引擎，然后传入 `--simulator-engine /path/to/libgodot.ios.template_release.arm64.simulator.a`：
+
+```bash
+# 在 Godot 4.4.1 源码目录执行（只影响模拟器验证，不替换 device 模板）
+scons platform=ios target=template_release ios_simulator=yes arch=arm64 disable_3d=yes vulkan=no metal=no modules_enabled_by_default=no module_gdscript_enabled=yes module_text_server_adv_enabled=yes module_freetype_enabled=yes module_webp_enabled=yes module_mbedtls_enabled=yes module_regex_enabled=yes optimize=size debug_symbols=no -j4
+```
+
 默认生成未签名 IPA。使用自己的证书和匹配的描述文件签名：
 
 ```bash
