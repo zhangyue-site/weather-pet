@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Apply shared Godot 4.4.1 bytecode to a verified native Android baseline.
 
-Native libraries, DEX, permissions, weather/updater plugins and raw fish assets
-stay byte-identical. Signing is a separate protected-server operation.
+Native libraries, permissions and raw assets stay byte-identical. Only the
+audited certificate-query and SHA-bound cache changes affect native DEX files. Signing is a separate protected-server operation.
 """
 import argparse
 import hashlib
@@ -11,6 +11,9 @@ import struct
 import zipfile
 
 from verify_pack import entries
+
+RESUME_SHA = 'e1e449cee955d9de365be15866e0ddbc41e872a3b4b411e1af8ede2316ffe4e6'
+UPDATER_SHA = '35e008f322af666eee66a8c4f83915060bec09afd1467871ed9650f10e48c288'
 
 BASE_SHA = 'b4cefabd459f42c7196fb785ffca71025faa9d927f4ad836fd848e4e3e097702'
 
@@ -51,10 +54,17 @@ def manifest_version(data, old_code, new_code, old_name, new_name):
     if changed != 1: raise ValueError('Expected one manifest versionCode')
     return bytes(output)
 
-def build(base, pack, output):
+def build(base, pack, output, updater_dex, resume_dex, version_code=221):
     if hashlib.sha256(base.read_bytes()).hexdigest() != BASE_SHA:
         raise ValueError('Unverified Android baseline')
-    table = entries(pack); patches = {}
+    if version_code <= 212: raise ValueError('Version must increase')
+    fixed_updater = updater_dex.read_bytes()
+    if hashlib.sha256(fixed_updater).hexdigest() != UPDATER_SHA:
+        raise ValueError('Updater DEX must match the independently audited one-constant patch')
+    fixed_resume = resume_dex.read_bytes()
+    if hashlib.sha256(fixed_resume).hexdigest() != RESUME_SHA:
+        raise ValueError('Downloader DEX must match the audited SHA-bound cache patch')
+    table = entries(pack); patches = {'classes3.dex': fixed_updater, 'classes5.dex':fixed_resume}
     with pack.open('rb') as source:
         for path, (offset, size, checksum, flags) in table.items():
             if not (path.startswith('companion/') and path.endswith(('.gdc', '.gd.remap'))) and path != 'project.binary':
@@ -77,7 +87,7 @@ def build(base, pack, output):
                 continue
             data = patches.get(name, source.read(name))
             if name == 'AndroidManifest.xml':
-                data = manifest_version(data, 212, 217, '1.4.2', '1.5.0')
+                data = manifest_version(data, 212, version_code, '1.4.2', '1.5.0')
             target.writestr(item, data); written.add(name)
         for name, data in patches.items():
             if name not in written: target.writestr(name, data, compress_type=zipfile.ZIP_DEFLATED)
@@ -88,7 +98,7 @@ def build(base, pack, output):
             if name not in patches and name != 'AndroidManifest.xml':
                 if source.read(name) != target.read(name): raise ValueError('Unexpected native/asset mutation: ' + name)
                 untouched += 1
-    return {'shared_entries': len(patches), 'unchanged_entries': untouched,
+    return {'shared_entries': len(patches)-2, 'version_code':version_code, 'updater_dex_sha256':UPDATER_SHA, 'resume_dex_sha256':RESUME_SHA, 'unchanged_entries': untouched,
             'sha256': hashlib.sha256(output.read_bytes()).hexdigest(), 'bytes': output.stat().st_size}
 
 if __name__ == '__main__':
@@ -97,5 +107,8 @@ if __name__ == '__main__':
     parser.add_argument('--base', type=Path, required=True)
     parser.add_argument('--pack', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--updater-dex', type=Path, required=True)
+    parser.add_argument('--resume-dex', type=Path, required=True)
+    parser.add_argument('--version-code', type=int, default=221)
     args = parser.parse_args()
-    print(json.dumps(build(args.base, args.pack, args.output), indent=2))
+    print(json.dumps(build(args.base, args.pack, args.output, args.updater_dex, args.resume_dex, args.version_code), indent=2))

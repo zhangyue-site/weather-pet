@@ -25,8 +25,10 @@ object ResumeDownloader {
             val dir = File(a.cacheDir, "updates").apply { mkdirs() }
             val expected = m.getLong("bytes")
             require(dir.usableSpace > expected * 2 + 10L * 1024 * 1024) { "手机存储空间不足" }
-            part = File(dir, "update.part")
-            val fin = File(dir, "update.apk")
+            val contentHash = m.getString("sha256")
+            require(contentHash.matches(Regex("[0-9a-fA-F]{64}"))) { "Invalid update hash" }
+            part = File(dir, "$contentHash.part")
+            val fin = File(dir, "$contentHash.apk")
             if (fin.exists()) {
                 up.verifyB(fin, m)
                 up.setReady(fin)

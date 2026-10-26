@@ -11,7 +11,8 @@ import org.json.JSONObject;
 public final class OtaChecks extends Instrumentation {
   int checks=0;
   boolean network=false;
-  public void onCreate(Bundle b) { super.onCreate(b); network="true".equals(b.getString("network")); start(); }
+  String goodPath,badPath;
+  public void onCreate(Bundle b) { super.onCreate(b); network="true".equals(b.getString("network")); goodPath=b.getString("good");badPath=b.getString("bad");start(); }
   void expect(boolean value,String message) { if(!value) throw new AssertionError(message); checks++; }
   void rejects(Method m,Object target,Object... args) throws Exception {
     try { m.invoke(target,args); throw new AssertionError("Expected rejection: "+m.getName()); }
@@ -25,11 +26,19 @@ public final class OtaChecks extends Instrumentation {
       Thread.sleep(100);
     }
   }
+  JSONObject metadata(File file) throws Exception {
+    android.content.pm.PackageInfo info=getTargetContext().getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(),0);
+    MessageDigest digest=MessageDigest.getInstance("SHA-256");
+    try(InputStream in=new FileInputStream(file)){byte[] b=new byte[65536];int n;while((n=in.read(b))!=-1)digest.update(b,0,n);}
+    StringBuilder hash=new StringBuilder();for(byte b:digest.digest())hash.append(String.format("%02x",b&255));
+    return new JSONObject().put("bytes",file.length()).put("sha256",hash.toString()).put("version_code",android.os.Build.VERSION.SDK_INT>=28?info.getLongVersionCode():info.versionCode);
+  }
   public void onStart() {
     Bundle result=new Bundle();
     try {
       Intent launch=new Intent().setClassName("com.weather.companion","com.godot.game.GodotApp").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
       Activity activity=startActivitySync(launch);
+      Thread.sleep(1500);
       Object registry=Class.forName("org.godotengine.godot.plugin.GodotPluginRegistry").getMethod("getPluginRegistry").invoke(null);
       Object updater=registry.getClass().getMethod("getPlugin",String.class).invoke(registry,"CompanionUpdater");
       expect(updater!=null,"Updater registered");
@@ -49,6 +58,14 @@ public final class OtaChecks extends Instrumentation {
       StringBuilder hash=new StringBuilder();for(byte b:digest.digest())hash.append(String.format("%02x",b&255));
       manifest.put("sha256",hash.toString());
       rejects(verify,updater,apk,manifest); // authentic same-version APK must not reinstall/downgrade
+      if(goodPath!=null && !goodPath.isEmpty()) {
+        File good=new File(goodPath); verify.invoke(updater,good,metadata(good));checks++;
+      }
+      if(badPath!=null && !badPath.isEmpty()) {
+        File bad=new File(badPath);
+        try { verify.invoke(updater,bad,metadata(bad));throw new AssertionError("Different signer accepted"); }
+        catch(InvocationTargetException e) {expect(e.getCause() instanceof IllegalArgumentException && e.getCause().getMessage().contains("签名"),"Different signer rejected specifically by signer check");}
+      }
       if(network) {
         type.getMethod("check_update",String.class).invoke(updater,"https://zz.zhangyue.site/weather-companion/latest.json");
         awaitIdle(type,updater,60000);

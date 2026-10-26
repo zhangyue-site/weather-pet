@@ -146,7 +146,7 @@ class CompanionUpdater(godot: Godot) : GodotPlugin(godot) {
         }
         require(bytesHex(digest.digest()).equals(m.getString("sha256"),true)) { "安装包哈希校验失败" }
         val a=activity ?: error("应用已关闭")
-        @Suppress("DEPRECATION") val flags = if(Build.VERSION.SDK_INT>=28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+        @Suppress("DEPRECATION") val flags = if(Build.VERSION.SDK_INT>=28) (PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES) else PackageManager.GET_SIGNATURES
         val incoming=a.packageManager.getPackageArchiveInfo(file.absolutePath,flags) ?: error("无法识别安装包")
         val installed=a.packageManager.getPackageInfo(a.packageName,flags)
         require(incoming.packageName==a.packageName && version(incoming)==m.getLong("version_code") && version(incoming)>version(installed)) { "包名或版本校验失败" }
