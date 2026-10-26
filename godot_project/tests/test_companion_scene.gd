@@ -31,11 +31,13 @@ func run() -> void:
 	app._open_sheet("care")
 	var before: int = app.world.bond
 	app.world.care_cooldown = 0
-	var care_button: Button = app.sheet_content.get_child(3)
+	var care_button: Button
+	for control in app.sheet_content.find_children("*", "Button", true, false):
+		if control.text == "摸摸头": care_button = control
 	care_button.pressed.emit()
 	expect(app.world.bond == before+1,"care button reaches behavior")
 	expect(not app.sheet.visible,"care closes sheet")
-	expect(app.effects.hearts.size()>0,"care generates visible affection")
+	expect(not app.scene_effects.recipe().filter(func(recipe): return recipe.get("source", "") == "interaction").is_empty(),"care generates scene-directed affection")
 	app.set_demo("rain")
 	for i in range(100): app.world.step(0.05)
 	expect(app.world.activity == "umbrella","scene rain chain")

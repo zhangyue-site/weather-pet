@@ -16,6 +16,7 @@
 @property(nonatomic) BOOL locating;
 @property(nonatomic) BOOL geocoding;
 @property(nonatomic) BOOL powerSaving;
+@property(nonatomic) BOOL reduceMotion;
 - (void)request:(int64_t)requestID;
 - (void)cancel;
 - (NSArray<NSDictionary *> *)drain;
@@ -31,6 +32,8 @@
             name:NSProcessInfoPowerStateDidChangeNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshPower)
             name:UIDeviceBatteryLevelDidChangeNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshPower)
+            name:UIAccessibilityReduceMotionStatusDidChangeNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(pause)
             name:UIApplicationDidEnterBackgroundNotification object:nil];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -43,7 +46,10 @@
 - (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; }
 - (void)refreshPower {
     float level = UIDevice.currentDevice.batteryLevel;
-    @synchronized(self) { self.powerSaving = NSProcessInfo.processInfo.lowPowerModeEnabled || (level >= 0 && level <= .2); }
+    @synchronized(self) {
+        self.powerSaving = NSProcessInfo.processInfo.lowPowerModeEnabled || (level >= 0 && level <= .2);
+        self.reduceMotion = UIAccessibilityIsReduceMotionEnabled();
+    }
 }
 - (void)pause { [self cancel]; }
 - (void)push:(NSDictionary *)event {
@@ -142,6 +148,7 @@ protected:
         ClassDB::bind_method(D_METHOD("cancel_location"), &CompanionIOS::cancel_location);
         ClassDB::bind_method(D_METHOD("poll_events"), &CompanionIOS::poll_events);
         ClassDB::bind_method(D_METHOD("low_power"), &CompanionIOS::low_power);
+        ClassDB::bind_method(D_METHOD("reduced_motion"), &CompanionIOS::reduced_motion);
     }
 public:
     CompanionIOS() { service = [CourtyardLocation new]; }
@@ -159,6 +166,7 @@ public:
         dispatch_async(dispatch_get_main_queue(), ^{ [owned cancel]; });
     }
     bool low_power() const { @synchronized(service) { return service.powerSaving; } }
+    bool reduced_motion() const { @synchronized(service) { return service.reduceMotion; } }
     Array poll_events() {
         Array result;
         for (NSDictionary *item in [service drain]) {

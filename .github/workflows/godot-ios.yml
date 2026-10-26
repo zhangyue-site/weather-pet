@@ -45,7 +45,7 @@ jobs:
         run: python3 tools/build_ios.py
       - uses: actions/upload-artifact@v4
         with:
-          name: courtyard-ios-1.4.3-213-unsigned
+          name: courtyard-ios-1.5.0-216-unsigned
           path: |
             builds/ios/*-unsigned.ipa
             builds/ios/build-report.json

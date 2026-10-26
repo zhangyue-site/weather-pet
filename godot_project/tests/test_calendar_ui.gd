@@ -24,17 +24,18 @@ func run() -> void:
 	expect(app.world.festival.matches.size()>=2,"birthday overlays Mid Autumn")
 	expect(app.calendar_label.text.contains("八月十五"),"lunar date shown on main view")
 	app._open_sheet("effect_library")
-	var nav = app.sheet_content.get_child(2)
-	nav.get_child(1).pressed.emit()
-	expect(app.effect_page==1,"effect pagination")
-	app.sheet_content.get_child(3).pressed.emit()
+	var effect_buttons: Array = []
+	for child in app.sheet_content.get_children():
+		if child is Button: effect_buttons.append(child)
+	expect(effect_buttons.size()==20,"gallery groups 200 variants into twenty distinct motifs")
+	effect_buttons[0].pressed.emit()
 	expect(not app.calendar_effects.override_id.is_empty(),"effect button renders chosen recipe")
 	app._preview_date("2026-02-17")
 	expect(app.calendar_effects.override_id.is_empty(),"date selection clears stale effect override")
 	expect(app.world.festival.id=="spring_festival","date selection resolves lunar festival")
 	app.queue_free()
 	await process_frame
-	if failures.is_empty(): push_warning("PASS test_calendar_ui: birthday form, overlapping calendar, effect browsing and reset")
+	if failures.is_empty(): push_warning("PASS test_calendar_ui: birthday form, overlapping calendar, grouped effect browsing and reset")
 	else:
 		for failure in failures: push_error("FAIL "+failure)
 	quit(0 if failures.is_empty() else 1)

@@ -25,6 +25,9 @@ func cancel_location() -> void:
 func low_power() -> bool:
 	return native != null and bool(native.low_power())
 
+func reduced_motion() -> bool:
+	return native != null and native.has_method("reduced_motion") and bool(native.reduced_motion())
+
 func _process(delta: float) -> void:
 	if native == null: return
 	poll_elapsed += delta

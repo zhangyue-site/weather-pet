@@ -5,23 +5,41 @@ var world: RefCounted
 var actor: Node2D
 var reduced_motion := false
 var override_id := ""
+var director: RefCounted
+# Exposes what the canvas actually submitted for scene diagnostics.
+var last_frame_recipes: Array[Dictionary] = []
+
+func recipes_for_draw() -> Array[Dictionary]:
+	var recipes: Array[Dictionary] = []
+	if not override_id.is_empty():
+		var chosen := Calendar.effect(override_id)
+		if not chosen.is_empty(): recipes.append(chosen)
+		return recipes
+	if director != null: return director.recipe()
+	if world == null: return recipes
+	var ids: Array = world.festival.get("effect_ids",[world.festival.get("effect","")])
+	for id in ids.slice(0,2):
+		var chosen := Calendar.effect(String(id))
+		if not chosen.is_empty(): recipes.append(chosen)
+	return recipes
 
 func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	last_frame_recipes.clear()
 	if world == null or actor == null: return
-	var ids: Array = world.festival.get("effect_ids",[world.festival.get("effect","")])
-	if not override_id.is_empty(): ids = [override_id]
-	for layer in range(mini(ids.size(),2)):
-		var recipe := Calendar.effect(String(ids[layer]))
-		if not recipe.is_empty(): _recipe(recipe,layer)
+	var recipes := recipes_for_draw()
+	last_frame_recipes = recipes.duplicate(true)
+	for layer in range(recipes.size()):
+		_recipe(recipes[layer],layer)
 
 func _recipe(recipe: Dictionary, layer: int) -> void:
 	var screen := get_viewport_rect().size
 	var center: Vector2 = actor.foot-Vector2(0,actor.body_height*0.65)
-	var t: float = 0.8 if reduced_motion else world.total_time*float(recipe.speed)
-	var count: int = 5 if reduced_motion else int(recipe.count)
+	var static_pose: bool = reduced_motion or bool(recipe.get("static",false))
+	var t: float = 0.8 if static_pose else float(recipe.get("clock",world.total_time))*float(recipe.speed)
+	var count: int = mini(5,int(recipe.count)) if static_pose else int(recipe.count)
 	var raining: bool = String(world.environment.id) in ["drizzle","rain","heavy_rain","thunderstorm"]
 	if raining: count = maxi(4,count/2)
 	var quiet: bool = world.festival.get("tone", "") == "solemn" or not bool(world.environment.is_day)
@@ -64,6 +82,11 @@ func _recipe(recipe: Dictionary, layer: int) -> void:
 			"trail":
 				p = Vector2(screen.x*(0.1+phase*0.8),screen.y*(0.63-phase*0.27)+sin(phase*TAU+t)*18)
 				opacity *= sin(phase*PI)
+		# Director local effects stay low beside the actors, clear of faces and UI.
+		if recipe.get("local",false):
+			p = actor.foot+Vector2((seed-0.5)*180,-20-phase*75)*scale_unit
+			opacity *= 0.8
+		opacity *= float(recipe.get("opacity",1.0))
 		# Keep weather legible and the character face clear.
 		if raining: opacity *= 0.48
 		if quiet: opacity *= 0.65
@@ -143,6 +166,10 @@ func _symbol(family: String, c: Color, t: float) -> void:
 			draw_colored_polygon(PackedVector2Array([Vector2(0,-1.6),Vector2(0.7,0.15),Vector2(-0.7,0.15)]),c)
 			draw_circle(Vector2(0,0.3),0.7,c)
 			draw_circle(Vector2(-0.2,0.2),0.16,bright)
+		"steam":
+			var points := PackedVector2Array()
+			for j in range(12): points.append(Vector2(sin(j*0.5+t)*0.4,-j*0.3))
+			draw_polyline(points,c,0.18,true)
 		"cloud":
 			_ellipse(Vector2(0,0.4),2.0,0.6,0,c)
 			draw_circle(Vector2(-0.8,0),0.7,c)

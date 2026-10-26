@@ -2,6 +2,7 @@ extends Node2D
 const Catalog = preload("res://companion/catalog.gd")
 var world: RefCounted
 var actor: Node2D
+var director: RefCounted
 var dots: Array[Dictionary] = []
 var hearts: Array[Dictionary] = []
 var rng := RandomNumberGenerator.new()
@@ -11,6 +12,10 @@ func _ready() -> void:
 	for i in range(150): dots.append({"x":rng.randf(),"y":rng.randf(),"s":rng.randf_range(0.3,1.0),"phase":rng.randf_range(0,TAU)})
 
 func affection() -> void:
+	if director != null:
+		director.trigger("pet")
+		return
+	if not hearts.is_empty() or actor == null: return
 	for i in range(6): hearts.append({"x":actor.foot.x + rng.randf_range(-45,45),"y":actor.foot.y-actor.body_height*0.75,"life":0.0,"phase":rng.randf_range(-1,1)})
 
 func _process(delta: float) -> void:
@@ -70,12 +75,12 @@ func _draw() -> void:
 			draw_set_transform(Vector2(size.x*0.5+sin(t*0.10+i)*60,y),0,Vector2(size.x/80,0.6))
 			draw_circle(Vector2.ZERO,80,Color(0.85,0.9,0.92,0.075))
 			draw_set_transform(Vector2.ZERO)
-	if not bool(world.environment.is_day) and not rain and not snow:
+	if director == null and not bool(world.environment.is_day) and not rain and not snow:
 		for i in range(18):
 			var d: Dictionary = dots[i]
 			var p := Vector2(d.x*size.x,(0.60+d.y*0.20)*size.y)
 			draw_circle(p,2,Color(1,0.88,0.42,0.4+sin(t*1.3+d.phase)*0.3))
-	if world.activity in ["cold", "drink", "sleep"]:
+	if director == null and world.activity in ["cold", "drink", "sleep"]:
 		for i in range(4):
 			var phase: float = fmod(t*0.5+i*0.23,1)
 			var p: Vector2 = actor.foot+Vector2(sin(t+i)*5,-actor.body_height*0.65-phase*30)

@@ -15,6 +15,8 @@ var cache_order: Array = []
 var frame_order: Array = []
 var cache_bytes := 0
 var body_height := 150.0
+var presentation_floor := -1.0
+var presentation_scale := 1.0
 var pos_x := 0.82
 var foot := Vector2.ZERO
 var action := "idle"
@@ -275,9 +277,9 @@ func _process(delta: float) -> void:
 			if absf(pos_x-target_x)<=0.004:
 				state = "around"; _step_action(_env_action(),7)
 	var size := get_viewport_rect().size
-	foot = Vector2(pos_x*size.x,size.y*0.8)
+	foot = Vector2(pos_x*size.x,presentation_floor if presentation_floor >= 0 else size.y*0.8)
 	duet_blend = move_toward(duet_blend,1.0 if world.duet_active else 0.0,dt*2.0)
-	body_height = minf(size.y*0.16,158)*(1.0+duet_blend*0.30)
+	body_height = minf(size.y*0.16,158)*(1.0+duet_blend*0.30)*presentation_scale
 	duet_lean = direction*duet_blend*(0.06+sin(world.duet_time*2.4)*0.025)
 	if world.duet_cue == "beat":
 		foot.y -= absf(sin(world.duet_time*5.0))*5.0

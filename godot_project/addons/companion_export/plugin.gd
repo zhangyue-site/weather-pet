@@ -3,6 +3,10 @@ extends EditorPlugin
 class FrameExporter extends EditorExportPlugin:
 	func _get_name() -> String: return "CompanionFrames"
 	func _export_begin(_features: PackedStringArray, _debug: bool, _path: String, _flags: int) -> void:
+		# Pair poses decode raw PNG at runtime. Imported texture export alone
+		# makes both actors disappear when a duet switches onto this atlas.
+		var poses := "res://companion/art/interaction-poses-v1.png"
+		add_file(poses, FileAccess.get_file_as_bytes(poses), false)
 		var base := "res://companion/fish/"
 		var manifest_path := base + "manifest.json"
 		if not FileAccess.file_exists(manifest_path):

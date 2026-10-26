@@ -35,6 +35,8 @@ def verify(pack, project):
     manifest = json.loads((base / "manifest.json").read_text())
     expected = [base / name / f"f{index:03d}.webp" for name, info in manifest.items() for index in range(info["frames"])]
     expected += [base / "manifest.json", base / "LICENSE-upstream.txt"]
+    # The runtime pose system decodes raw PNG bytes, not an imported .ctex.
+    expected += [project / 'companion/art/interaction-poses-v1.png']
     missing, mismatched = [], []
     with pack.open("rb") as f:
         for path in expected:
@@ -47,7 +49,7 @@ def verify(pack, project):
             data = f.read(size)
             if flags or hashlib.md5(data).hexdigest() != md5 or hashlib.sha256(data).digest() != hashlib.sha256(path.read_bytes()).digest():
                 mismatched.append(resource)
-    report = {"files": len(table), "fish_frames": len(expected) - 2,
+    report = {"files": len(table), "fish_frames": len(expected) - 3,
               "missing": missing, "mismatched": mismatched,
               "sha256": hashlib.sha256(pack.read_bytes()).hexdigest()}
     print(json.dumps({**report, "missing": missing[:10], "mismatched": mismatched[:10]}, ensure_ascii=False))
