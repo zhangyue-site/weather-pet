@@ -1,0 +1,58 @@
+--- a/platform/ios/app_delegate.mm
++++ b/platform/ios/app_delegate.mm
+@@ -49,6 +49,11 @@
+ extern int ios_main(int, char **);
+ extern void ios_finish();
+ 
++API_AVAILABLE(ios(13.0))
++@interface GodotSceneDelegate : UIResponder <UIWindowSceneDelegate>
++@property(strong, nonatomic) UIWindow *window;
++@end
++
+ @implementation AppDelegate
+ 
+ enum {
+@@ -90,8 +95,8 @@
+ 
+ 	self.window.rootViewController = viewController;
+ 
+-	// Show the window
+-	[self.window makeKeyAndVisible];
++	// The scene delegate attaches the window before making it visible.
++	// Showing an unassociated window here uses the legacy UIKit lifecycle.
+ 
+ 	[[NSNotificationCenter defaultCenter]
+ 			addObserver:self
+@@ -184,3 +189,32 @@
+ }
+ 
+ @end
++
++// UIKit 27 requires an actual scene, not just a scene declaration in Info.plist.
++@implementation GodotSceneDelegate
++- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
++	if (![scene isKindOfClass:[UIWindowScene class]]) {
++		return;
++	}
++	AppDelegate *delegate = (AppDelegate *)[UIApplication sharedApplication].delegate;
++	self.window = delegate.window;
++	self.window.windowScene = (UIWindowScene *)scene;
++	[self.window makeKeyAndVisible];
++}
++- (void)sceneDidBecomeActive:(UIScene *)scene {
++	AppDelegate *delegate = (AppDelegate *)[UIApplication sharedApplication].delegate;
++	[delegate applicationDidBecomeActive:[UIApplication sharedApplication]];
++}
++- (void)sceneWillResignActive:(UIScene *)scene {
++	AppDelegate *delegate = (AppDelegate *)[UIApplication sharedApplication].delegate;
++	[delegate applicationWillResignActive:[UIApplication sharedApplication]];
++}
++- (void)sceneWillEnterForeground:(UIScene *)scene {
++	AppDelegate *delegate = (AppDelegate *)[UIApplication sharedApplication].delegate;
++	[delegate applicationWillEnterForeground:[UIApplication sharedApplication]];
++}
++- (void)sceneDidEnterBackground:(UIScene *)scene {
++	AppDelegate *delegate = (AppDelegate *)[UIApplication sharedApplication].delegate;
++	[delegate applicationDidEnterBackground:[UIApplication sharedApplication]];
++}
++@end

@@ -11,6 +11,7 @@ import subprocess
 import zipfile
 
 from verify_pack import verify
+from verify_ios_scene import verify as verify_scene
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -24,6 +25,7 @@ def main():
     parser.add_argument("--godot", default=os.environ.get("GODOT_BIN", "/Applications/Godot.app/Contents/MacOS/Godot"))
     parser.add_argument("--output", type=Path, default=ROOT / "builds/ios")
     parser.add_argument("--simulator", action="store_true")
+    parser.add_argument("--device-engine", type=Path, help="Matching Godot 4.4.1 device engine with the scene lifecycle patch")
     parser.add_argument("--simulator-engine", type=Path, help="Matching Godot 4.4.1 arm64 simulator .a (required by recent Apple Silicon runtimes)")
     parser.add_argument("--template", type=Path, default=Path.home() / "Library/Application Support/Godot/export_templates/4.4.1.stable/ios.zip")
     parser.add_argument("--identity", default=os.environ.get("IOS_SIGN_IDENTITY"))
@@ -70,22 +72,43 @@ def main():
         project_file = output / "Courtyard.xcodeproj/project.pbxproj"
         lines = project_file.read_text().splitlines()
         project_file.write_text("\n".join(line for line in lines if "/* MetalFX.framework in Frameworks */" not in line) + "\n")
-        if args.simulator_engine:
-            framework = output / "Courtyard.xcframework"
-            info_path = framework / "Info.plist"
-            framework_info = plistlib.loads(info_path.read_bytes())
-            for library in framework_info["AvailableLibraries"]:
-                if library.get("SupportedPlatformVariant") == "simulator":
-                    destination = framework / library["LibraryIdentifier"] / library["LibraryPath"]
-                    shutil.copy2(args.simulator_engine, destination)
-                    library["SupportedArchitectures"] = ["arm64"]
-            info_path.write_bytes(plistlib.dumps(framework_info))
+    engine = args.simulator_engine if args.simulator else args.device_engine
+    if engine is None or not engine.is_file():
+        raise SystemExit("Build the matching scene-capable engine with tools/build_ios_engine.py")
+    symbols = subprocess.check_output(["nm", "-gU", engine], stderr=subprocess.DEVNULL)
+    if b"_OBJC_CLASS_$_GodotSceneDelegate" not in symbols:
+        raise SystemExit("Legacy engine lacks UIScene lifecycle support")
+    framework = output / "Courtyard.xcframework"
+    info_path = framework / "Info.plist"
+    framework_info = plistlib.loads(info_path.read_bytes())
+    replaced = 0
+    for library in framework_info["AvailableLibraries"]:
+        if (library.get("SupportedPlatformVariant") == "simulator") == args.simulator:
+            destination = framework / library["LibraryIdentifier"] / library["LibraryPath"]
+            shutil.copy2(engine, destination)
+            library["SupportedArchitectures"] = ["arm64"]
+            replaced += 1
+    if replaced != 1: raise SystemExit("Expected one matching engine library")
+    info_path.write_bytes(plistlib.dumps(framework_info))
+    app_info_path = output / "Courtyard/Courtyard-Info.plist"
+    app_info = plistlib.loads(app_info_path.read_bytes())
+    app_info["UIApplicationSceneManifest"] = {
+        "UIApplicationSupportsMultipleScenes": False,
+        "UISceneConfigurations": {"UIWindowSceneSessionRoleApplication": [{
+            "UISceneConfigurationName": "Default Configuration",
+            "UISceneDelegateClassName": "GodotSceneDelegate",
+            "UISceneClassName": "UIWindowScene"}]}}
+    app_info_path.write_bytes(plistlib.dumps(app_info))
     derived = output / "DerivedData"
     run(["xcodebuild", "-project", output / "Courtyard.xcodeproj", "-scheme", "Courtyard",
          "-configuration", "Release", "-sdk", sdk, "-derivedDataPath", derived,
          "CODE_SIGNING_ALLOWED=NO", "ARCHS=x86_64" if args.simulator and not args.simulator_engine else "ARCHS=arm64", "ONLY_ACTIVE_ARCH=YES",
          "COMPILER_INDEX_STORE_ENABLE=NO", "build"])
     app = derived / f"Build/Products/Release-{sdk}/Courtyard.app"
+    if not args.simulator:
+        executable = plistlib.loads((app / "Info.plist").read_bytes())["CFBundleExecutable"]
+        run(["xcrun", "strip", "-S", app / executable])
+    verify_scene(app, check_private_paths=not args.simulator)
     if args.simulator:
         print(json.dumps({"simulator_app": str(app), "pack": audit}))
         return
@@ -116,7 +139,7 @@ def main():
                 "bundle": info["CFBundleIdentifier"], "signed": signed, "bytes": ipa.stat().st_size,
                 "sha256": hashlib.sha256(ipa.read_bytes()).hexdigest(), "godot": version,
                 "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                "pack": audit, "ipa": str(ipa), "physical_device_tested": False}
+                "pack": audit, "ipa": ipa.name, "physical_device_tested": False}
     (output / "build-report.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
     print(json.dumps(metadata, ensure_ascii=False))
 

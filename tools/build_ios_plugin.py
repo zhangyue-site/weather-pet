@@ -39,6 +39,8 @@ def main():
         obj = folder / "CompanionIOS.o"
         run(["xcrun", "--sdk", sdk, "clang++", "-c", ROOT / "native/ios/CompanionIOS.mm",
              "-o", obj, "-target", target, "-isysroot", sysroot, "-std=c++17", "-O2",
+             "-ffile-prefix-map=" + str(source) + "=godot",
+             "-ffile-prefix-map=" + str(ROOT) + "=courtyard",
              "-fobjc-arc", "-fmodules", "-fcxx-modules", "-fno-exceptions",
              "-DIOS_ENABLED", "-DUNIX_ENABLED", "-DPTRCALL_ENABLED", "-DNDEBUG",
              "-I", source, "-I", source / "platform/ios"])
